@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fleet memory fixture</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.4 "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+      background: #efeae2;
+      color: #1c1915;
+    }
+    .shell { display: flex; min-height: 100vh; }
+    .chat { flex: 1; padding: 24px; color: #6b645b; }
+    .pane {
+      width: 320px;
+      background: #f7f4ee;
+      border-left: 1px solid #ddd4c6;
+      padding: 16px;
+    }
+    h1 { font-size: 18px; margin: 0 0 8px; }
+    h2 { font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; margin: 16px 0 6px; }
+    .muted { color: #6b645b; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { padding: 8px 0; border-top: 1px solid #e4dccf; display: flex; flex-direction: column; gap: 2px; }
+    button { margin-top: 12px; font: inherit; padding: 6px 10px; }
+    @media (max-width: 700px) {
+      .shell { display: block; }
+      .chat { display: none; }
+      .pane { width: 100%; border-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <main class="chat">Ops questions land here. Recalls stay in the right pane.</main>
+    <aside class="pane" id="pane">
+      <h1>Fleet memory</h1>
+      <h2>Store</h2>
+      <p id="stats">0 notes, 0 recalls, 0 turns</p>
+      <h2>Recent recalls</h2>
+      <div id="recalls"><p class="muted">No recalls yet.</p></div>
+      <button type="button" id="refresh">Refresh</button>
+    </aside>
+  </div>
+  <script>
+    const ready = {
+      notes: 6,
+      recalls: 1,
+      turns: 0,
+      rows: [{ query: "GL-14", hits: "dock-cutoff, generator-lane" }]
+    }
+    const params = new URLSearchParams(location.search)
+    let shown = params.get("state") !== "before"
+    const stats = document.getElementById("stats")
+    const recalls = document.getElementById("recalls")
+    function noun(n, word) {
+      return `${n} ${word}${n === 1 ? "" : "s"}`
+    }
+    function paint() {
+      if (!shown) {
+        stats.textContent = "0 notes, 0 recalls, 0 turns"
+        recalls.replaceChildren()
+        const p = document.createElement("p")
+        p.className = "muted"
+        p.textContent = "No recalls yet."
+        recalls.append(p)
+        return
+      }
+      stats.textContent = `${noun(ready.notes, "note")}, ${noun(ready.recalls, "recall")}, ${noun(ready.turns, "turn")}`
+      recalls.replaceChildren()
+      const ul = document.createElement("ul")
+      for (const row of ready.rows) {
+        const li = document.createElement("li")
+        const query = document.createElement("span")
+        query.textContent = row.query
+        const hits = document.createElement("span")
+        hits.className = "muted"
+        hits.textContent = row.hits
+        li.append(query, hits)
+        ul.append(li)
+      }
+      recalls.append(ul)
+    }
+    paint()
+    document.getElementById("refresh").addEventListener("click", () => {
+      shown = true
+      paint()
+    })
+  </script>
+</body>
+</html>

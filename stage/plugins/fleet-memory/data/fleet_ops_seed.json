@@ -1,0 +1,38 @@
+[
+  {
+    "id": "dock-cutoff",
+    "title": "Same-day dock cutoff",
+    "body": "Warren dock GL-14 accepts same-day freight until 14:30 America/New_York.",
+    "tags": ["dock", "warren", "gl-14"]
+  },
+  {
+    "id": "generator-lane",
+    "title": "Generator lane",
+    "body": "Generator shipments stage in lane B and leave on route GL-14.",
+    "tags": ["generator", "gl-14"]
+  },
+  {
+    "id": "routine-post",
+    "title": "Routine invoice post",
+    "body": "Posting account.move with action_post is a routine production write.",
+    "tags": ["odoo", "prod"]
+  },
+  {
+    "id": "front-door",
+    "title": "Vendor mail front door",
+    "body": "Vendor threads are claimed, classified, and drafted. They are not auto-sent.",
+    "tags": ["mail"]
+  },
+  {
+    "id": "count-cycle",
+    "title": "Tuesday cycle count",
+    "body": "Cycle counts for small parts run Tuesday at 06:00 before the dock opens.",
+    "tags": ["count", "warehouse"]
+  },
+  {
+    "id": "carrier-window",
+    "title": "Carrier window",
+    "body": "The afternoon carrier window closes at 16:00. Missed freight rolls to the next route.",
+    "tags": ["carrier", "dock"]
+  }
+]
