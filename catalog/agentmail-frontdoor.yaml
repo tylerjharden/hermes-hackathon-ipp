@@ -1,6 +1,6 @@
 name: agentmail-frontdoor
 repo: https://github.com/tylerjharden/hermes-hackathon-ipp
-sha: 1c1a12cfb7ab1372158363e45a89bd6be1d843bf
+sha: 3e2feea4b1216a6b2343b18a6de710ae5b126c46
 subdir: plugins/agentmail-frontdoor
 description: Claim, classify, and route AgentMail threads. Create drafts only.
 maintainer: tylerjharden

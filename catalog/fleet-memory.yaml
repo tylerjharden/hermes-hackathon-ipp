@@ -1,6 +1,6 @@
 name: fleet-memory
 repo: https://github.com/tylerjharden/hermes-hackathon-ipp
-sha: 1c1a12cfb7ab1372158363e45a89bd6be1d843bf
+sha: 3e2feea4b1216a6b2343b18a6de710ae5b126c46
 subdir: plugins/fleet-memory
 description: Recall local fleet ops notes, with an optional Notion search mirror.
 maintainer: tylerjharden
@@ -9,8 +9,8 @@ category: memory
 requires_hermes: ">=0.22.0"
 version: "1.0.0"
 screenshots:
-  - https://raw.githubusercontent.com/tylerjharden/hermes-hackathon-ipp/1c1a12cfb7ab1372158363e45a89bd6be1d843bf/plugins/fleet-memory/desktop/screenshots/desktop-after.png
-  - https://raw.githubusercontent.com/tylerjharden/hermes-hackathon-ipp/1c1a12cfb7ab1372158363e45a89bd6be1d843bf/plugins/fleet-memory/desktop/screenshots/mobile-after.png
+  - https://raw.githubusercontent.com/tylerjharden/hermes-hackathon-ipp/3e2feea4b1216a6b2343b18a6de710ae5b126c46/plugins/fleet-memory/desktop/screenshots/desktop-after.png
+  - https://raw.githubusercontent.com/tylerjharden/hermes-hackathon-ipp/3e2feea4b1216a6b2343b18a6de710ae5b126c46/plugins/fleet-memory/desktop/screenshots/mobile-after.png
 capabilities:
   provides_tools:
     - fleet_memory_search
