@@ -1,0 +1,4 @@
+{
+  "name": "odoo-prod-guard",
+  "api": "plugin_api.py"
+}

@@ -1,0 +1,7 @@
+{
+  "thread_id": "thrd_fixture_1001",
+  "inbox_id": "ops",
+  "from": "vendor@example.com",
+  "subject": "Urgent invoice for dock GL-14",
+  "text": "Please confirm the urgent invoice for the generator shipment on dock GL-14."
+}

@@ -1,0 +1,36 @@
+name: agentmail-frontdoor
+version: 1.0.0
+description: Claim, classify, and route AgentMail threads. Create drafts only. Sends stay behind Hermes approval.
+author: Tyler Harden
+license: MIT
+homepage: https://github.com/tylerjharden/hermes-hackathon-ipp
+requires_hermes: ">=0.22.0"
+manifest_version: 2
+provides_tools:
+  - am_claim_thread
+  - am_classify
+  - am_route
+  - am_draft_reply
+  - am_ledger_upsert
+  - am_ledger_get
+provides_hooks:
+  - pre_tool_call
+requires_env:
+  - name: AGENTMAIL_API_KEY
+    description: "AgentMail API key. Set to the placeholder mock to load the plugin offline."
+    url: "https://docs.agentmail.to"
+    secret: true
+config_schema:
+  mode:
+    type: str
+    choices: [auto, mock, live]
+    default: auto
+    description: "auto calls AgentMail only when the key is set and is not the placeholder mock."
+  inbox_id:
+    type: str
+    default: ops
+    description: "Default AgentMail inbox id."
+  recipient_allowlist:
+    type: list
+    default: []
+    description: "Addresses a send may target. Empty means every send is blocked until Hermes approval is already active."

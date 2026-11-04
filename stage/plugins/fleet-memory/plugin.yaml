@@ -1,0 +1,26 @@
+name: fleet-memory
+version: 1.0.0
+description: Recall local fleet ops notes, with an optional Notion search mirror.
+author: Tyler Harden
+license: MIT
+homepage: https://github.com/tylerjharden/hermes-hackathon-ipp
+requires_hermes: ">=0.22.0"
+manifest_version: 2
+provides_tools:
+  - fleet_memory_search
+  - fleet_memory_status
+  - fleet_memory_ingest
+provides_hooks: []
+hooks:
+  - prefetch
+  - sync_turn
+requires_env:
+  - name: NOTION_TOKEN
+    description: "Notion integration token. Set to the placeholder mock to stay on the local store."
+    url: "https://www.notion.so/my-integrations"
+    secret: true
+config_schema:
+  recall_budget:
+    type: int
+    default: 3
+    description: "Maximum notes returned by prefetch."

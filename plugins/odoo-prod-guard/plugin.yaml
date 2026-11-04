@@ -1,0 +1,46 @@
+name: odoo-prod-guard
+version: 1.0.0
+description: Odoo JSON-2 reads and writes, with a Hermes approval gate on non-routine production writes.
+author: Tyler Harden
+license: MIT
+homepage: https://github.com/tylerjharden/hermes-hackathon-ipp
+requires_hermes: ">=0.22.0"
+manifest_version: 2
+provides_tools:
+  - odoo_call
+  - odoo_search_read
+  - odoo_version
+provides_hooks:
+  - pre_tool_call
+requires_env:
+  - name: ODOO_URL
+    description: "Odoo base URL. Set to the placeholder mock for offline use."
+    secret: true
+  - name: ODOO_DB
+    description: "Odoo database name. Use mock offline."
+    secret: true
+  - name: ODOO_USER
+    description: "Odoo user login. Use mock offline."
+    secret: true
+  - name: ODOO_API_KEY
+    description: "Odoo API key. Set to the placeholder mock to load the plugin offline."
+    url: "https://www.odoo.com/documentation/19.0/developer/reference/external_api.html"
+    secret: true
+config_schema:
+  base_url:
+    type: str
+    default: ""
+    description: "Odoo base URL. The ODOO_URL secret wins when it is set."
+  database:
+    type: str
+    default: ""
+    description: "Database name. The ODOO_DB secret wins when it is set."
+  env:
+    type: str
+    choices: [dev, prod]
+    default: dev
+    description: "prod arms the write gate. dev records a warning and does not ask for approval."
+  routine_allowlist:
+    type: list
+    default: []
+    description: "model:method patterns. fnmatch. Example account.move:action_post."
