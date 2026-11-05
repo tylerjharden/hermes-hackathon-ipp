@@ -123,6 +123,32 @@ def test_mock_key_does_not_call_transport():
     assert created["sent"] is False
 
 
+def test_register_seeds_fixture_thread(home):
+    class Ctx:
+        def register_tool(self, **kwargs):
+            return None
+
+        def register_hook(self, name, callback):
+            return None
+
+        def register_skill(self, *args, **kwargs):
+            return None
+
+        def get_config(self, key, default=None):
+            return default
+
+    PKG.register(Ctx())
+    row = json.loads(PKG.tools.make_handlers(lambda: {"mode": "mock", "inbox_id": "ops"})["am_ledger_get"](
+        {"thread_id": "thrd_fixture_1001"}
+    ))
+    assert row["ok"] is True
+    assert row["thread"]["label"] == "triage"
+    classified = json.loads(PKG.tools.make_handlers(lambda: {"mode": "mock", "inbox_id": "ops"})["am_classify"](
+        {"thread_id": "thrd_fixture_1001"}
+    ))
+    assert classified["thread"]["classification"]["urgency"] == "high"
+
+
 def test_register_matches_manifest():
     class Ctx:
         def __init__(self):

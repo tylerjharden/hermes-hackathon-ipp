@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .store import NoteStore, format_recall
+from .store import NoteStore, format_recall, open_profile_store
 
 try:
     from agent.memory_provider import MemoryProvider
@@ -142,8 +142,10 @@ class FleetMemoryProvider(MemoryProvider):
     def _search(self, args: dict) -> str:
         query = str(args.get("query") or "")
         limit = int(args.get("limit") or self._budget)
-        notes = self._require().search(query, limit)
-        return json.dumps({"ok": True, "notes": notes})
+        store = self._require()
+        notes = store.search(query, limit)
+        store.record_recall(query, [note["id"] for note in notes])
+        return json.dumps({"ok": True, "backend": "notion" if self._token else "fixture", "notes": notes})
 
     def _status(self, args: dict) -> str:
         counts = self._require().counts()
@@ -165,6 +167,58 @@ class FleetMemoryProvider(MemoryProvider):
             [str(tag) for tag in tags],
         )
         return json.dumps({"ok": True, "note": note})
+
+
+def tool_search(args: dict, **kwargs) -> str:
+    store = open_profile_store()
+    try:
+        query = str((args or {}).get("query") or "")
+        limit = int((args or {}).get("limit") or 3)
+        notes = store.search(query, limit)
+        store.record_recall(query, [note["id"] for note in notes])
+        return json.dumps({"ok": True, "backend": "fixture", "notes": notes})
+    finally:
+        store.close()
+
+
+def tool_status(args: dict, **kwargs) -> str:
+    store = open_profile_store()
+    try:
+        counts = store.counts()
+        token = bool(_notion_token())
+        return json.dumps({
+            "ok": True,
+            "provider": "fleet-memory",
+            "backend": "notion" if token else "fixture",
+            "notion": token,
+            **counts,
+        })
+    finally:
+        store.close()
+
+
+def tool_ingest(args: dict, **kwargs) -> str:
+    store = open_profile_store()
+    try:
+        tags = (args or {}).get("tags") or []
+        if isinstance(tags, str):
+            tags = [part.strip() for part in tags.split(",") if part.strip()]
+        note = store.ingest(
+            str(args["id"]),
+            str(args["title"]),
+            str(args["body"]),
+            [str(tag) for tag in tags],
+        )
+        return json.dumps({"ok": True, "backend": "fixture", "note": note})
+    finally:
+        store.close()
+
+
+TOOL_HANDLERS = {
+    "fleet_memory_search": tool_search,
+    "fleet_memory_status": tool_status,
+    "fleet_memory_ingest": tool_ingest,
+}
 
 
 def _refresh_notion(token: str, query: str, store: NoteStore) -> None:

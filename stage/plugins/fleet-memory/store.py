@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -159,6 +160,13 @@ def _note(row: sqlite3.Row) -> dict:
     data = dict(row)
     data["tags"] = json.loads(data["tags"])
     return data
+
+
+def open_profile_store() -> NoteStore:
+    home = os.environ.get("HERMES_HOME", "").strip()
+    if not home:
+        raise RuntimeError("HERMES_HOME is not set")
+    return NoteStore(Path(home) / "fleet-memory")
 
 
 def format_recall(notes: list[dict], budget_chars: int) -> str:

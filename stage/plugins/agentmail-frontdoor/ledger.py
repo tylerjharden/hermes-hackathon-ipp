@@ -70,6 +70,9 @@ class Ledger:
             )
             """
         )
+        columns = {row[1] for row in self._conn.execute("PRAGMA table_info(threads)")}
+        if "body" not in columns:
+            self._conn.execute("ALTER TABLE threads ADD COLUMN body TEXT NOT NULL DEFAULT ''")
         self._conn.commit()
 
     def close(self) -> None:
@@ -82,17 +85,18 @@ class Ledger:
             ).fetchone()
         return _row(row) if row else None
 
-    def claim(self, thread_id: str, inbox_id: str, subject: str = "") -> dict:
+    def claim(self, thread_id: str, inbox_id: str, subject: str = "", body: str = "") -> dict:
         with self._lock:
             self._conn.execute(
                 """
-                INSERT INTO threads (thread_id, inbox_id, label, subject, updated_at)
-                VALUES (?, ?, 'triage', ?, ?)
+                INSERT INTO threads (thread_id, inbox_id, label, subject, body, updated_at)
+                VALUES (?, ?, 'triage', ?, ?, ?)
                 ON CONFLICT(thread_id) DO UPDATE SET
                     subject = CASE WHEN excluded.subject != '' THEN excluded.subject ELSE threads.subject END,
+                    body = CASE WHEN excluded.body != '' THEN excluded.body ELSE threads.body END,
                     updated_at = excluded.updated_at
                 """,
-                (thread_id, inbox_id, subject, _now()),
+                (thread_id, inbox_id, subject, body, _now()),
             )
             self._conn.commit()
             row = self._conn.execute(

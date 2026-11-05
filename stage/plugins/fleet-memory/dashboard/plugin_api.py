@@ -35,9 +35,18 @@ def _store():
 @router.get("/summary")
 async def summary():
     store = _store()
+    from agent.secret_scope import get_secret
+    token = ""
+    try:
+        token = (get_secret("NOTION_TOKEN") or "").strip()
+    except Exception:
+        token = ""
+    if token == "mock":
+        token = ""
     payload = {
         "counts": store.counts(),
         "recalls": store.recent_recalls(),
+        "backend": "notion" if token else "fixture",
     }
     store.close()
     return payload

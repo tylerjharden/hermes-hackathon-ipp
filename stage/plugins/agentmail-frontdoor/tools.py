@@ -96,7 +96,7 @@ def make_handlers(config_fn):
             if row is None:
                 raise LedgerError("not_found", thread_id=thread_id)
             subject = str(args.get("subject") or row.get("subject") or "")
-            text = str(args.get("text") or "")
+            text = str(args.get("text") or row.get("body") or "")
             found = classify_text(subject, text)
             stored = ledger.classify(thread_id, found)
             ledger.close()
@@ -284,6 +284,27 @@ SCHEMAS = {
         ["thread_id"],
     ),
 }
+
+
+def ensure_fixture_thread() -> dict | None:
+    """Claim the shipped inbound fixture once per profile. Later calls leave the row alone."""
+    try:
+        ledger = _ledger()
+    except RuntimeError:
+        return None
+    try:
+        fixture = load_fixture()
+        existing = ledger.get(fixture["thread_id"])
+        if existing is not None:
+            return existing
+        return ledger.claim(
+            fixture["thread_id"],
+            fixture["inbox_id"],
+            fixture["subject"],
+            fixture["text"],
+        )
+    finally:
+        ledger.close()
 
 
 def load_fixture(path: Path | None = None) -> dict:

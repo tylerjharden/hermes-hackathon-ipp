@@ -64,16 +64,29 @@ def test_register_returns_a_new_instance():
     seen = []
 
     class Ctx:
+        def __init__(self):
+            self.tools = {}
+
         def register_memory_provider(self, provider):
             seen.append(provider)
 
         def register_skill(self, *args, **kwargs):
             return None
 
-    PKG.register(Ctx())
-    PKG.register(Ctx())
+        def register_tool(self, **kwargs):
+            self.tools[kwargs["name"]] = kwargs
+
+    ctx_a = Ctx()
+    ctx_b = Ctx()
+    PKG.register(ctx_a)
+    PKG.register(ctx_b)
     assert seen[0] is not seen[1]
     assert seen[0].name == "fleet-memory"
+    assert set(ctx_a.tools) == {
+        "fleet_memory_search",
+        "fleet_memory_status",
+        "fleet_memory_ingest",
+    }
     names = [item["name"] for item in seen[0].get_tool_schemas()]
     manifest = (PLUGIN / "plugin.yaml").read_text()
     for name in names:

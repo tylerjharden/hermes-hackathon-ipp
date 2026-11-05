@@ -10,21 +10,26 @@ function MemoryPane(props) {
 
   useEffect(() => {
     let alive = true
-    props.rest('/summary').then((body) => {
-      if (alive) setSummary(body)
-    }).catch((err) => {
-      if (alive) {
-        setSummary({
-          counts: { notes: 0, recalls: 0, turns: 0 },
-          recalls: [],
-          error: err && err.message ? err.message : 'Gateway route unavailable',
-        })
-      }
-    })
+    const load = () => {
+      props.rest('/summary').then((body) => {
+        if (alive) setSummary(body)
+      }).catch((err) => {
+        if (alive) {
+          setSummary({
+            counts: { notes: 0, recalls: 0, turns: 0 },
+            recalls: [],
+            error: err && err.message ? err.message : 'Gateway route unavailable',
+          })
+        }
+      })
+    }
+    load()
+    const timer = setInterval(load, 3000)
     return () => {
       alive = false
+      clearInterval(timer)
     }
-  }, [props.rest])
+  }, [])
 
   const counts = summary.counts || { notes: 0, recalls: 0, turns: 0 }
   const recalls = summary.recalls || []
@@ -32,7 +37,13 @@ function MemoryPane(props) {
   return jsxs('div', {
     className: 'pane',
     children: [
-      jsx('h1', { children: 'Fleet memory' }),
+      jsxs('header', {
+        className: 'pane-head',
+        children: [
+          jsx('h1', { children: 'Fleet memory' }),
+          jsx('span', { className: 'muted', children: summary.backend === 'notion' ? 'notion' : 'fixture' }),
+        ],
+      }),
       summary.error ? jsx('p', { className: 'error', children: summary.error }) : null,
       jsx('h2', { children: 'Store' }),
       jsx('p', {

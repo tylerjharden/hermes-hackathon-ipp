@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .hooks import pre_tool_call
-from .tools import SCHEMAS, make_handlers
+from .tools import SCHEMAS, ensure_fixture_thread, make_handlers
 
 
 def _as_list(value) -> list[str]:
@@ -54,5 +54,6 @@ def register(ctx) -> None:
         )
 
     ctx.register_hook("pre_tool_call", gate)
+    ensure_fixture_thread()
     skill = Path(__file__).resolve().parent / "skills" / "frontdoor" / "SKILL.md"
     ctx.register_skill("frontdoor", skill, "Route inbound mail and draft replies. Do not send.")
