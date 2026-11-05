@@ -74,7 +74,10 @@ class GateLog:
         target = self.root / "summary.json"
         events = self.recent()
         if not target.is_file():
-            return {"env": "dev", "routine_allowlist": [], "events": events}
-        stored = json.loads(target.read_text())
+            stored = {"env": "dev", "routine_allowlist": []}
+        else:
+            stored = json.loads(target.read_text())
         stored["events"] = events
+        from .client import current_backend
+        stored["backend"] = current_backend()
         return stored

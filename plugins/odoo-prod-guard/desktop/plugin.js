@@ -19,22 +19,27 @@ function GuardPane(props) {
 
   useEffect(() => {
     let alive = true
-    props.rest('/summary').then((body) => {
-      if (alive) setSummary(body)
-    }).catch((err) => {
-      if (alive) {
-        setSummary({
-          env: 'dev',
-          routine_allowlist: [],
-          events: [],
-          error: err && err.message ? err.message : 'Gateway route unavailable',
-        })
-      }
-    })
+    const load = () => {
+      props.rest('/summary').then((body) => {
+        if (alive) setSummary(body)
+      }).catch((err) => {
+        if (alive) {
+          setSummary({
+            env: 'dev',
+            routine_allowlist: [],
+            events: [],
+            error: err && err.message ? err.message : 'Gateway route unavailable',
+          })
+        }
+      })
+    }
+    load()
+    const timer = setInterval(load, 3000)
     return () => {
       alive = false
+      clearInterval(timer)
     }
-  }, [props.rest])
+  }, [])
 
   const events = summary.events || []
   const allow = summary.routine_allowlist || []
@@ -46,6 +51,7 @@ function GuardPane(props) {
         children: [
           jsx('h1', { children: 'Odoo prod guard' }),
           jsx(Badge, { env: summary.env }),
+          jsx('span', { className: 'muted', children: summary.backend === 'live' ? 'live' : 'fixture' }),
         ],
       }),
       summary.error

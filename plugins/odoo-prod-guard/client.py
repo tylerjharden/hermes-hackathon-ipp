@@ -19,6 +19,12 @@ def read_secret(name: str) -> str:
     return (get_secret(name) or "").strip()
 
 
+def current_backend() -> str:
+    if use_mock(read_secret("ODOO_URL"), read_secret("ODOO_DB"), read_secret("ODOO_USER"), read_secret("ODOO_API_KEY")):
+        return "fixture"
+    return "live"
+
+
 def use_mock(url: str, db: str, user: str, api_key: str) -> bool:
     values = [url, db, user, api_key]
     if any(not value or value == MOCK for value in values):

@@ -44,6 +44,8 @@ def register(ctx) -> None:
     def gate(tool_name, args, **kwargs):
         try:
             log = GateLog()
+            current = config()
+            log.write_summary(str(current.get("env") or "dev"), list(current.get("routine_allowlist") or []))
         except Exception:
             log = None
         return gate_call(tool_name, args, config(), log)
