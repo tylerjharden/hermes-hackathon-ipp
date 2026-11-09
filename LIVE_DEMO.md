@@ -91,6 +91,8 @@ hermes desktop
 
 Open the right-hand Odoo guard pane, then the Fleet memory pane. Both poll their plugin route every 3 seconds.
 
+If the Fleet memory pane returns 404, `fleet-memory` is missing from `plugins.enabled`. Setting `memory.provider` alone does not mount the pane API. The install commands above already pass `--enable`. If the pane still 404s, run `hermes plugins enable fleet-memory`.
+
 Before the TUI prompts, the Odoo event list is empty and the badge reads `fixture`. After the unlink prompt, the list gains an `approve` row for `res.partner.unlink`. After the dock prompt, Fleet memory shows a recall for `GL-14`.
 
 Capture each pane at about 1280 pixels wide and again at about 390. The chat column stays on the left at desktop width. At 390 the pane fills the width.

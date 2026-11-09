@@ -28,6 +28,8 @@ When does dock GL-14 stop taking same-day freight?
 
 The desktop pane is `desktop/plugin.js`. It reads `GET /api/plugins/fleet-memory/summary` and shows store counts plus recent recalls. Open `desktop/fixture.html` when Hermes Desktop is not running. `?state=before` is the empty pane. The default shows one recall. Refresh on the empty pane fills the sample.
 
+If that route returns 404, `fleet-memory` is missing from `plugins.enabled`. Setting `memory.provider` alone does not mount the pane API. Run `hermes plugins enable fleet-memory`. The install command in `LIVE_DEMO.md` already passes `--enable`, so a 404 after that install means the enable step did not stay on.
+
 ## Disclosures
 
 The store lives under the active profile's `hermes_home`, passed into `initialize`. The plugin does not read `~/.hermes` by a hardcoded path, `.env`, or `auth.json`.
