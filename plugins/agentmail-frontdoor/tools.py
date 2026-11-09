@@ -228,6 +228,83 @@ def make_handlers(config_fn):
         except Exception as exc:
             return _error(exc)
 
+    def prepare(args: dict, **kwargs) -> str:
+        try:
+            pulse("Preparing one draft. Nothing is sent.")
+            thread_id = str(args["thread_id"]).strip()
+            inbox_id = str(args.get("inbox_id") or config_fn().get("inbox_id") or "ops").strip()
+            ledger = _ledger()
+            row = ledger.get(thread_id)
+            if row is None:
+                row = ledger.claim(
+                    thread_id,
+                    inbox_id,
+                    str(args.get("subject") or ""),
+                    str(args.get("text") or ""),
+                    str(args.get("from_name") or ""),
+                    str(args.get("to") or ""),
+                )
+            subject = str(args.get("subject") or row.get("subject") or "")
+            text = str(args.get("text") or row.get("body") or "")
+            if not row.get("classification"):
+                row = ledger.classify(thread_id, classify_text(subject, text))
+            if row["label"] not in {"needs-approval", "done"}:
+                recipient = str(args.get("to") or row.get("from_addr") or "").strip()
+                if not recipient:
+                    raise LedgerError("missing_recipient", thread_id=thread_id)
+                who = row.get("from_name") or recipient
+                draft_body = f"{who}, this draft is waiting for a person. It has not been sent."
+                client = _client(config_fn())
+                created = client.create_draft(
+                    row["inbox_id"],
+                    thread_id,
+                    [recipient],
+                    "Re: " + (subject or "thread"),
+                    draft_body,
+                    ["needs-approval"],
+                )
+                draft_id = str(created.get("draft_id") or created.get("id") or "")
+                row = ledger.draft(thread_id, draft_body, recipient, draft_id)
+                ledger.note(thread_id, "draft", "Draft stored. It has not been sent.")
+            stored = ledger.get(thread_id)
+            ledger.close()
+            return _dump({"ok": True, "sent": False, "thread": stored})
+        except Exception as exc:
+            return _error(exc)
+
+    def send(args: dict, **kwargs) -> str:
+        try:
+            pulse("Send is at the approval gate. Demo mode does not send.")
+            thread_id = str(args["thread_id"]).strip()
+            ledger = _ledger()
+            row = ledger.get(thread_id)
+            if row is None:
+                raise LedgerError("not_found", thread_id=thread_id)
+            client = _client(config_fn())
+            if client.mode != "live":
+                stored = ledger.mark_send(
+                    thread_id,
+                    "not-sent",
+                    "Demo mode did not send. The approval gate was the only step.",
+                )
+                ledger.close()
+                return _dump({
+                    "ok": True,
+                    "sent": False,
+                    "mock": True,
+                    "gate": "approve",
+                    "thread": stored,
+                })
+            draft_id = str(row.get("draft_id") or "")
+            if not draft_id:
+                raise LedgerError("no_draft", thread_id=thread_id)
+            client.send_draft(row["inbox_id"], draft_id)
+            stored = ledger.mark_send(thread_id, "sent", "Live send ran after approval.")
+            ledger.close()
+            return _dump({"ok": True, "sent": True, "mock": False, "gate": "approve", "thread": stored})
+        except Exception as exc:
+            return _error(exc)
+
     def queue(args: dict, **kwargs) -> str:
         try:
             pulse("Reading the inbox queue")
@@ -266,6 +343,8 @@ def make_handlers(config_fn):
         "am_route": route,
         "am_draft_reply": draft_reply,
         "am_ledger_upsert": ledger_upsert,
+        "am_prepare": prepare,
+        "am_send": send,
         "am_queue": queue,
         "am_ledger_get": ledger_get,
     }
@@ -287,7 +366,7 @@ def _schema(name: str, description: str, properties: dict, required: list[str]) 
 SCHEMAS = {
     "am_claim_thread": _schema(
         "am_claim_thread",
-        "Claim an inbound AgentMail thread into the local ledger at label triage.",
+        "Low-level claim. Prefer am_prepare.",
         {
             "thread_id": {"type": "string"},
             "inbox_id": {"type": "string"},
@@ -297,7 +376,7 @@ SCHEMAS = {
     ),
     "am_classify": _schema(
         "am_classify",
-        "Classify a claimed thread from its subject and body. Does not send mail.",
+        "Low-level classify. Prefer am_prepare.",
         {
             "thread_id": {"type": "string"},
             "subject": {"type": "string"},
@@ -307,13 +386,13 @@ SCHEMAS = {
     ),
     "am_route": _schema(
         "am_route",
-        "Move a thread from triage to delegated, then to awaiting-worker, and record the worker.",
+        "Low-level route. Prefer am_prepare.",
         {"thread_id": {"type": "string"}, "worker": {"type": "string"}},
         ["thread_id", "worker"],
     ),
     "am_draft_reply": _schema(
         "am_draft_reply",
-        "Create an AgentMail draft and move the thread to needs-approval. Never sends.",
+        "Low-level draft. Prefer am_prepare. Never sends.",
         {
             "thread_id": {"type": "string"},
             "to": {"type": "string"},
@@ -334,6 +413,23 @@ SCHEMAS = {
             "worker": {"type": "string"},
             "subject": {"type": "string"},
         },
+        ["thread_id"],
+    ),
+    "am_prepare": _schema(
+        "am_prepare",
+        "One call: claim, classify, and draft. Does not send.",
+        {
+            "thread_id": {"type": "string"},
+            "to": {"type": "string"},
+            "subject": {"type": "string"},
+            "text": {"type": "string"},
+        },
+        ["thread_id"],
+    ),
+    "am_send": _schema(
+        "am_send",
+        "Ask a person before sending. Demo mode never sends. Live sends only after approval.",
+        {"thread_id": {"type": "string"}},
         ["thread_id"],
     ),
     "am_queue": _schema(

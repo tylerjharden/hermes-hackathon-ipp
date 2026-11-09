@@ -133,7 +133,7 @@ def _schema(name: str, description: str, properties: dict, required: list[str]) 
 SCHEMAS = {
     "odoo_call": _schema(
         "odoo_call",
-        "Call an Odoo JSON-2 model method. Production writes outside the routine allowlist need Hermes approval.",
+        "One model method. Prod writes outside the allowlist stop for approval.",
         {
             "model": {"type": "string"},
             "method": {"type": "string"},
@@ -144,7 +144,7 @@ SCHEMAS = {
     ),
     "odoo_search_read": _schema(
         "odoo_search_read",
-        "Read Odoo records. This tool is never a write.",
+        "Read records. Not a write. Skip unless a read was asked for.",
         {
             "model": {"type": "string"},
             "domain": {"type": "array"},
@@ -155,7 +155,7 @@ SCHEMAS = {
     ),
     "odoo_version": _schema(
         "odoo_version",
-        "Read the Odoo server version.",
+        "Read the server version. Skip unless a version was asked for.",
         {},
         [],
     ),

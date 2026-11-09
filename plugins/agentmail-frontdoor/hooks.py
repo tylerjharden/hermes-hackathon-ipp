@@ -51,8 +51,47 @@ def _approval_active(args: dict, kwargs: dict) -> bool:
     return False
 
 
+def _mark_send_waiting(args: dict) -> None:
+    thread_id = str(args.get("thread_id") or "").strip()
+    if not thread_id:
+        return
+    try:
+        from .ledger import Ledger
+        from .paths import data_dir
+    except Exception:
+        return
+    try:
+        ledger = Ledger(data_dir("agentmail-frontdoor") / "ledger.db")
+    except Exception:
+        return
+    try:
+        if ledger.get(thread_id) is None:
+            return
+        ledger.mark_send(
+            thread_id,
+            "awaiting-approval",
+            "Send is waiting for a person. Nothing has been sent.",
+        )
+    except Exception:
+        return
+    finally:
+        ledger.close()
+
+
 def pre_tool_call(tool_name: str, args: dict | None, allowlist: list[str], **kwargs) -> dict | None:
     payload = args or {}
+    name = (tool_name or "").strip().lower().replace("-", "_")
+    if name == "am_send":
+        if _approval_active(payload, kwargs):
+            return None
+        _mark_send_waiting(payload)
+        return {
+            "action": "approve",
+            "message": (
+                "Sending mail needs a person. Demo mode does not send, "
+                "even after this prompt is accepted."
+            ),
+        }
     if not _is_send(tool_name, payload):
         return None
     if _approval_active(payload, kwargs):

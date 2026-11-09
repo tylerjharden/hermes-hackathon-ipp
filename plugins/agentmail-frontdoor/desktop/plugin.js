@@ -146,7 +146,15 @@ function FrontDoor(props) {
                 style: { background: '#fff', border: `1px solid ${line}`, padding: 8, whiteSpace: 'pre-wrap' },
                 children: selected.draft_body || 'No draft yet.',
               }),
-              jsx('p', { style: { color: mute }, children: selected.recipient ? `To ${selected.recipient}. Not sent.` : 'Not sent.' }),
+              jsx('h2', { style: { fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase' }, children: 'Send gate' }),
+              jsx('p', {
+                children: selected.send_state === 'awaiting-approval'
+                  ? 'Awaiting approval. Not sent.'
+                  : selected.send_state === 'sent'
+                    ? 'Sent after approval.'
+                    : 'Not sent. Demo mode never sends.',
+              }),
+              jsx('p', { style: { color: mute }, children: selected.recipient ? `To ${selected.recipient}.` : 'No recipient yet.' }),
               selected.label === 'needs-approval'
                 ? jsxs('div', {
                     style: { display: 'flex', gap: 8 },

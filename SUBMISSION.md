@@ -16,7 +16,7 @@ Deadline: Wednesday 2026-11-11 17:00 ET. This file is the copy for the form. Not
 
 ## agentmail-frontdoor
 
-The front door claims an inbound thread, classifies it, and creates an AgentMail draft. It does not send. A send to an address outside the allowlist is blocked. On first load the profile ledger holds demo threads for Maria Chen at Harborline Logistics (`thrd_harborline_1842`) and Devon Okonkwo at North Pier Freight (`thrd_northpier_220`). In Hermes TUI, ask it to classify Maria's thread and draft a reply to maria.chen@harborline.example, and leave the draft for approval. The row should land on `needs-approval` with `sent` false. The desktop pane is the right-hand Front door. Approve and Deny there update the ledger and do not send.
+The front door claims an inbound thread, classifies it, and creates an AgentMail draft. It does not send. A send to an address outside the allowlist is blocked. On first load the profile ledger holds demo threads for Maria Chen at Harborline Logistics (`thrd_harborline_1842`) and Devon Okonkwo at North Pier Freight (`thrd_northpier_220`). In Hermes TUI, ask it to classify Maria's thread and draft a reply to maria.chen@harborline.example, and leave the draft for approval. The row should land on `needs-approval` with `sent` false. The desktop pane is the right-hand Front door. `am_prepare` drafts in one call. `am_send` always raises the approval prompt. Demo mode does not send, even after that prompt is accepted. Approve and Deny on the draft update the ledger and do not send.
 
 Demo video:
 

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import math
 import os
+import re
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -108,20 +110,10 @@ class NoteStore:
         return _note(row) if row else None
 
     def search(self, query: str, limit: int) -> list[dict]:
-        tokens = [part for part in query.lower().split() if part]
         with self._lock:
             rows = self._conn.execute("SELECT * FROM notes").fetchall()
-        ranked = []
-        for row in rows:
-            note = _note(row)
-            hay = " ".join([note["title"], note["body"], " ".join(note["tags"])]).lower()
-            score = sum(1 for token in tokens if token in hay) if tokens else 1
-            if score:
-                note["score"] = score
-                note["snippet"] = note["body"][:160]
-                ranked.append((score, note))
-        ranked.sort(key=lambda item: (-item[0], item[1]["id"]))
-        return [note for _, note in ranked[:limit]]
+        notes = [_note(row) for row in rows]
+        return _bm25(notes, query, limit)
 
     def record_recall(self, query: str, hit_ids: list[str], source: str = "tool", hits: list[dict] | None = None) -> None:
         cards = []
@@ -194,11 +186,13 @@ def open_profile_store() -> NoteStore:
 
 
 def format_recall(notes: list[dict], budget_chars: int) -> str:
-    lines = ["Fleet notes from the local store:"]
+    lines = ["Local store. Answer with these titles and scores."]
     used = len(lines[0])
     shown = 0
     for note in notes:
-        line = f"- {note['title']} (score {note.get('score', 0)}): {note['body']}"
+        score = note.get("score", 0)
+        shown_score = f"{score:.2f}" if isinstance(score, float) else str(score)
+        line = f"- {note['title']} (score {shown_score}): {note['body']}"
         if used + len(line) + 1 > budget_chars:
             break
         lines.append(line)
@@ -206,7 +200,69 @@ def format_recall(notes: list[dict], budget_chars: int) -> str:
         shown += 1
     if shown == 0:
         return ""
-    closer = f"Matched {shown} local notes. Answer with the titles and the cutoff, not a single bare line."
-    if used + len(closer) + 1 <= budget_chars:
-        lines.append(closer)
     return "\n".join(lines)
+
+
+_STOP = frozenset(
+    "a an the to of and or for on in at is are was were be do does did when what how with from this that it".split()
+)
+_TOKEN = re.compile(r"[a-z0-9]+")
+
+
+def _tokens(text: str) -> list[str]:
+    return [tok for tok in _TOKEN.findall(text.lower()) if tok not in _STOP]
+
+
+def _bm25(notes: list[dict], query: str, limit: int) -> list[dict]:
+    """Rank notes with BM25. A hit must clear 45% of the best score."""
+    query_tokens = _tokens(query)
+    if not notes or not query_tokens or limit <= 0:
+        return []
+    docs = []
+    for note in notes:
+        weighted = (
+            _tokens(note["title"]) * 3
+            + _tokens(note["body"])
+            + _tokens(" ".join(note["tags"]))
+            + _tokens(str(note["id"]).replace("-", " "))
+        )
+        docs.append((note, weighted))
+    total = len(docs)
+    avgdl = sum(len(tokens) for _, tokens in docs) / total or 1
+    df: dict[str, int] = {}
+    for _, tokens in docs:
+        for token in set(tokens):
+            df[token] = df.get(token, 0) + 1
+    k1 = 1.5
+    b = 0.75
+    ranked = []
+    for note, tokens in docs:
+        counts: dict[str, int] = {}
+        for token in tokens:
+            counts[token] = counts.get(token, 0) + 1
+        length = len(tokens) or 1
+        score = 0.0
+        for token in query_tokens:
+            freq = counts.get(token, 0)
+            if not freq:
+                continue
+            idf = math.log(1 + (total - df.get(token, 0) + 0.5) / (df.get(token, 0) + 0.5))
+            denom = freq + k1 * (1 - b + b * length / avgdl)
+            score += idf * (freq * (k1 + 1)) / denom
+        if score > 0:
+            ranked.append((score, note))
+    if not ranked:
+        return []
+    ranked.sort(key=lambda item: (-item[0], item[1]["id"]))
+    floor = ranked[0][0] * 0.45
+    found = []
+    for score, note in ranked:
+        if score < floor:
+            break
+        card = dict(note)
+        card["score"] = round(score, 2)
+        card["snippet"] = note["body"][:160]
+        found.append(card)
+        if len(found) >= limit:
+            break
+    return found

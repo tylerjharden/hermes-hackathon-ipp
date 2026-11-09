@@ -1,10 +1,10 @@
 ---
 name: fleet-ops
-description: Search local fleet notes before answering an ops question.
+description: Answer from the local-store prefetch. Save a new note in one call.
 ---
 
 # Fleet ops
 
-Call `fleet_memory_search` with the dock, route, or carrier words from the question. Call `fleet_memory_status` for store counts. Call `fleet_memory_ingest` to save a new local note.
+If the prefetch block is present, answer from it in two sentences. Name the title and the score. Do not call a tool.
 
-Prefetch already runs before the turn. Answer with each matched title, its score, and the fact from the note. A dock question should name the 14:30 America/New_York cutoff. Do not answer with a single bare line. Do not wait on Notion. Ingest writes the local store only.
+To save a new fact, call `fleet_memory_remember` once. Do not call `fleet_memory_ingest` and `fleet_memory_search` as two steps. Do not narrate before the tool call.

@@ -24,7 +24,7 @@ function MemoryPane(props) {
   useEffect(() => {
     let alive = true
     const load = () => {
-      props.rest('/summary').then((body) => {
+      props.rest(`/summary?t=${Date.now()}`, { cache: 'no-store' }).then((body) => {
         if (alive) setSummary(body)
       }).catch((err) => {
         if (alive) {
@@ -36,7 +36,7 @@ function MemoryPane(props) {
       })
     }
     load()
-    const timer = setInterval(load, 1000)
+    const timer = setInterval(load, 500)
     return () => {
       alive = false
       clearInterval(timer)

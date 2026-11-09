@@ -86,6 +86,7 @@ def test_register_returns_a_new_instance():
         "fleet_memory_search",
         "fleet_memory_status",
         "fleet_memory_ingest",
+        "fleet_memory_remember",
     }
     names = [item["name"] for item in seen[0].get_tool_schemas()]
     manifest = (PLUGIN / "plugin.yaml").read_text()
@@ -133,8 +134,11 @@ def test_recall_cards_keep_query_and_title_apart(tmp_path):
     assert hit["title"] == "Same-day dock cutoff"
     assert hit["score"] >= 1
     assert "freight cutoffdock-cutoff" not in json.dumps(recalls[0])
-    assert "local store" in text
+    assert "local store" in text.lower()
     assert "score" in text
+    broad = provider._store.search("warehouse cycle count tuesday", 5)
+    assert [note["id"] for note in broad] == ["count-cycle"]
+    assert provider._store.search("zzzz-nomatch", 5) == []
     ingested = json.loads(provider.handle_tool_call(
         "fleet_memory_ingest",
         {

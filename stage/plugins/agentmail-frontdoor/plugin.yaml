@@ -1,12 +1,14 @@
 name: agentmail-frontdoor
 version: 1.0.0
-description: Claim, classify, and route AgentMail threads. Create drafts only. Sends stay behind Hermes approval.
+description: Prepare one draft, then ask before any send. Demo mode never sends.
 author: Tyler Harden
 license: MIT
 homepage: https://github.com/tylerjharden/hermes-hackathon-ipp
 requires_hermes: ">=0.22.0"
 manifest_version: 2
 provides_tools:
+  - am_prepare
+  - am_send
   - am_claim_thread
   - am_classify
   - am_route

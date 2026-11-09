@@ -10,6 +10,7 @@ provides_tools:
   - fleet_memory_search
   - fleet_memory_status
   - fleet_memory_ingest
+  - fleet_memory_remember
 provides_hooks: []
 hooks:
   - prefetch

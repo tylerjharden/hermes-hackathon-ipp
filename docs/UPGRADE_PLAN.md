@@ -1,5 +1,14 @@
 # Upgrade plan
 
+## Recut
+
+Tool calls are milliseconds. The dead time is the model. The skills now say to call one composite where the flow used to be a chain, and to stop talking before the first call.
+
+- `am_prepare` claims, classifies, and drafts. `am_send` always returns an approval directive. The handler does not send in demo mode. Live send runs only after that gate, and it posts the draft send endpoint. The pane shows `Awaiting approval` and then `Not sent`.
+- Fleet search is BM25 with a 45% score floor, and the cards show the score. `fleet_memory_remember` saves and ranks in one call. The pane polls `/summary?t=` every 500ms with `cache: no-store`.
+- The Odoo list is split into Passed and Gated. Allowlisted calls are not under the gated heading. The approval prompt stays in TUI and Desktop.
+- There is no flag that hides `.ssh` in the Files pane. `LIVE_DEMO.md` says so at the top.
+
 Director notes from the current cuts are the priority list. Tyler's verdict was low quality, dead time, panes that sit still, and too few features.
 
 ## What fits

@@ -102,6 +102,9 @@ def test_register_and_hook_kwargs(home):
         def register_hook(self, name, callback):
             self.hooks.setdefault(name, []).append(callback)
 
+        def register_skill(self, *args, **kwargs):
+            return None
+
         def get_config(self, key, default=None):
             values = {"env": "prod", "routine_allowlist": ["account.move:action_post"]}
             return values.get(key, default)

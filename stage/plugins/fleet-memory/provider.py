@@ -102,6 +102,7 @@ class FleetMemoryProvider(MemoryProvider):
             "fleet_memory_search": self._search,
             "fleet_memory_status": self._status,
             "fleet_memory_ingest": self._ingest,
+            "fleet_memory_remember": self._remember,
         }.get(tool_name)
         if handler is None:
             return json.dumps({"ok": False, "error": "unknown_tool"})
@@ -125,7 +126,10 @@ class FleetMemoryProvider(MemoryProvider):
         )
 
     def system_prompt_block(self) -> str:
-        return "Fleet memory recalls local ops notes. It does not send mail or post to Odoo."
+        return (
+            "If a local-store prefetch is present, answer from it in two sentences "
+            "and do not call a tool. Name the title and the score."
+        )
 
     def on_session_end(self, messages=None) -> None:
         return None
@@ -171,6 +175,14 @@ class FleetMemoryProvider(MemoryProvider):
         )
         _pulse(store, f"Ingested {note['title']} into the local store")
         return json.dumps({"ok": True, "note": note})
+
+    def _remember(self, args: dict) -> str:
+        stored = json.loads(self._ingest(args))
+        if not stored.get("ok"):
+            return json.dumps(stored)
+        notes = self._require().search(str(args.get("title") or ""), 3)
+        self._require().record_recall(str(args.get("title") or ""), [note["id"] for note in notes], source="tool", hits=notes)
+        return json.dumps({"ok": True, "note": stored["note"], "notes": notes})
 
 
 def tool_search(args: dict, **kwargs) -> str:
@@ -220,10 +232,31 @@ def tool_ingest(args: dict, **kwargs) -> str:
         store.close()
 
 
+def tool_remember(args: dict, **kwargs) -> str:
+    store = open_profile_store()
+    try:
+        tags = (args or {}).get("tags") or []
+        if isinstance(tags, str):
+            tags = [part.strip() for part in tags.split(",") if part.strip()]
+        note = store.ingest(
+            str(args["id"]),
+            str(args["title"]),
+            str(args["body"]),
+            [str(tag) for tag in tags],
+        )
+        notes = store.search(str(args.get("title") or ""), 3)
+        store.record_recall(str(args.get("title") or ""), [item["id"] for item in notes], source="tool", hits=notes)
+        _pulse(store, f"Remembered {note['title']}")
+        return json.dumps({"ok": True, "backend": "local", "note": note, "notes": notes})
+    finally:
+        store.close()
+
+
 TOOL_HANDLERS = {
     "fleet_memory_search": tool_search,
     "fleet_memory_status": tool_status,
     "fleet_memory_ingest": tool_ingest,
+    "fleet_memory_remember": tool_remember,
 }
 
 
@@ -279,19 +312,30 @@ def _schema(name: str, description: str, properties: dict, required: list[str]) 
 SCHEMAS = [
     _schema(
         "fleet_memory_search",
-        "Search local fleet ops notes.",
+        "Search the local store. Skip this when prefetch already answered.",
         {"query": {"type": "string"}, "limit": {"type": "integer"}},
         ["query"],
     ),
     _schema(
         "fleet_memory_status",
-        "Return note, recall, and turn counts for this profile.",
+        "Counts only. Skip this during a normal answer.",
         {},
         [],
     ),
     _schema(
         "fleet_memory_ingest",
-        "Store one local ops note. This does not write to Notion.",
+        "Low-level save. Prefer fleet_memory_remember.",
+        {
+            "id": {"type": "string"},
+            "title": {"type": "string"},
+            "body": {"type": "string"},
+            "tags": {"type": "array", "items": {"type": "string"}},
+        },
+        ["id", "title", "body"],
+    ),
+    _schema(
+        "fleet_memory_remember",
+        "One call: save a note and return the ranked card. Does not write to Notion.",
         {
             "id": {"type": "string"},
             "title": {"type": "string"},

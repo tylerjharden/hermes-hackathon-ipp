@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from .log import GateLog
 from .tools import SCHEMAS, gate_call, make_handlers
@@ -51,3 +52,5 @@ def register(ctx) -> None:
         return gate_call(tool_name, args, config(), log)
 
     ctx.register_hook("pre_tool_call", gate)
+    skill = Path(__file__).resolve().parent / "skills" / "odoo-guard" / "SKILL.md"
+    ctx.register_skill("odoo-guard", skill, "Two writes: one allowlisted, one gated. Stop at the prompt.")

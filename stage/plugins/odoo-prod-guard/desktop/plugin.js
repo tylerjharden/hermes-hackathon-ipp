@@ -66,6 +66,8 @@ function GuardPane(props) {
   }, [])
 
   const events = summary.events || []
+  const passed = events.filter((event) => event.decision === 'allowed' || event.decision === 'warn')
+  const gatedEvents = events.filter((event) => event.decision === 'approve')
   const allow = summary.routine_allowlist || []
   const passing = events.find((event) => event.decision === 'allowed')
   const gated = events.find((event) => event.decision === 'approve')
@@ -134,20 +136,33 @@ function GuardPane(props) {
       allow.length
         ? jsx('ul', { children: allow.map((item) => jsx('li', { children: item }, item)) })
         : jsx('p', { style: { color: mute }, children: 'No routine writes. Every production write asks for approval.' }),
-      jsx('h2', { style: { fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase' }, children: 'Live call log' }),
-      events.length
+      jsx('h2', { style: { fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase' }, children: 'Passed' }),
+      passed.length
         ? jsx('ul', {
             style: { listStyle: 'none', padding: 0, margin: 0 },
-            children: events.map((event) => jsxs('li', {
+            children: passed.map((event) => jsxs('li', {
               style: { padding: '8px 0', borderTop: `1px solid ${line}` },
               children: [
                 badge(event.decision, tone(event.decision)),
                 jsx('div', { children: `${event.model}.${event.method}` }),
-                jsx('div', { style: { color: mute }, children: event.audit || event.at }),
               ],
-            }, String(event.id))),
+            }, `passed-${event.id}`)),
           })
-        : jsx('p', { style: { color: mute }, children: 'No gated calls yet.' }),
+        : jsx('p', { style: { color: mute }, children: 'No allowlisted writes yet.' }),
+      jsx('h2', { style: { fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase' }, children: 'Gated' }),
+      gatedEvents.length
+        ? jsx('ul', {
+            style: { listStyle: 'none', padding: 0, margin: 0 },
+            children: gatedEvents.map((event) => jsxs('li', {
+              style: { padding: '8px 0', borderTop: `1px solid ${line}` },
+              children: [
+                badge(event.decision, tone(event.decision)),
+                jsx('div', { children: `${event.model}.${event.method}` }),
+                jsx('div', { style: { color: mute }, children: event.audit || 'Waiting for approval. Not executed.' }),
+              ],
+            }, `gated-${event.id}`)),
+          })
+        : jsx('p', { style: { color: mute }, children: 'No gated writes yet.' }),
     ],
   })
 }

@@ -180,6 +180,50 @@ def test_register_matches_manifest():
     ctx.hooks["pre_tool_call"][0]("am_ledger_get", {"thread_id": "t"}, task_id="x", extra=1)
 
 
+def test_prepare_is_one_call_and_send_never_sends_in_demo(home):
+    PKG.tools.ensure_demo_threads()
+    handlers = PKG.tools.make_handlers(lambda: {"mode": "mock", "inbox_id": "ops"})
+    prepared = json.loads(handlers["am_prepare"]({"thread_id": "thrd_harborline_1842"}))
+    assert prepared["sent"] is False
+    assert prepared["thread"]["label"] == "needs-approval"
+    gate = PKG.hooks.pre_tool_call("am_send", {"thread_id": "thrd_harborline_1842"}, [])
+    assert gate["action"] == "approve"
+    waiting = json.loads(handlers["am_ledger_get"]({"thread_id": "thrd_harborline_1842"}))
+    assert waiting["thread"]["send_state"] == "awaiting-approval"
+    skipped = PKG.hooks.pre_tool_call(
+        "am_send",
+        {"thread_id": "thrd_harborline_1842"},
+        [],
+        approved=True,
+    )
+    assert skipped is None
+    sent = json.loads(handlers["am_send"]({"thread_id": "thrd_harborline_1842"}))
+    assert sent["sent"] is False
+    assert sent["mock"] is True
+    assert sent["thread"]["send_state"] == "not-sent"
+
+
+def test_live_send_posts_the_send_endpoint():
+    seen = {}
+
+    def transport(method, url, headers, body):
+        seen["method"] = method
+        seen["url"] = url
+        return {"sent": True}
+
+    client = PKG.client.AgentMailClient("real-key", "live", transport=transport)
+    created = client.send_draft("ops", "draft_live_1")
+    assert created["sent"] is True
+    assert seen["method"] == "POST"
+    assert seen["url"] == "https://api.agentmail.to/v0/inboxes/ops/drafts/draft_live_1/send"
+
+    def boom(method, url, headers, body):
+        raise AssertionError("demo send opened the network")
+
+    mock = PKG.client.AgentMailClient("mock", "auto", transport=boom)
+    assert mock.send_draft("ops", "draft_1")["sent"] is False
+
+
 def test_pane_decision_never_sends(home):
     PKG.tools.ensure_demo_threads()
     result = PKG.tools.pane_decision("thrd_northpier_220", "deny")

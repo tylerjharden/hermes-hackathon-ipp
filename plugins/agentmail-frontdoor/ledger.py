@@ -75,6 +75,7 @@ class Ledger:
             ("body", "TEXT NOT NULL DEFAULT ''"),
             ("from_name", "TEXT NOT NULL DEFAULT ''"),
             ("from_addr", "TEXT NOT NULL DEFAULT ''"),
+            ("send_state", "TEXT NOT NULL DEFAULT ''"),
         ):
             if name not in columns:
                 self._conn.execute(f"ALTER TABLE threads ADD COLUMN {name} {decl}")
@@ -247,6 +248,20 @@ class Ledger:
             self._conn.commit()
             if cur.rowcount == 0:
                 raise LedgerError("not_found", thread_id=thread_id)
+            stored = self._conn.execute(
+                "SELECT * FROM threads WHERE thread_id = ?", (thread_id,)
+            ).fetchone()
+        return _row(stored)
+
+    def mark_send(self, thread_id: str, state: str, detail: str) -> dict:
+        self._require(thread_id)
+        with self._lock:
+            self._conn.execute(
+                "UPDATE threads SET send_state = ?, updated_at = ? WHERE thread_id = ?",
+                (state, _now(), thread_id),
+            )
+            self._history_unlocked(thread_id, "send", detail)
+            self._conn.commit()
             stored = self._conn.execute(
                 "SELECT * FROM threads WHERE thread_id = ?", (thread_id,)
             ).fetchone()

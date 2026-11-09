@@ -1,5 +1,18 @@
 # Live Hermes session
 
+## Files pane and .ssh
+
+There is no setting that hides `.ssh`.
+
+The Files pane lists the workspace directory. `.ssh` is not in `ALWAYS_EXCLUDED` (`apps/desktop/src/lib/excluded-paths.ts`) and not in `_FS_READDIR_HIDDEN` (`hermes_cli/web_routers/files.py`). When the workspace is the home directory, `.ssh` is on screen. The sensitive-name list hides `.env` and `auth.json`. It does not hide `.ssh`.
+
+What does exist:
+
+- Appearance → Simple sets `fileBrowserOpen` to false, so the pane rests closed. The file-browser toggle and ⌘J close it. A tool that focuses the files pane can still open it for this session.
+- "Show gitignored files" is off unless the project opts in (`hermes.desktop.files.showIgnored`). That hides `.ssh` only when this workspace is a git repo that ignores it. A home directory that is not a git repo still lists `.ssh`.
+
+Open the session on this repository, not on `$HOME`, and leave the interface on Simple.
+
 Use this path to capture Hermes itself. The plugins stay on local fixtures when the secrets are unset or set to the placeholder `mock`. `demo.py` is only a unit-test helper.
 
 Hermes on PyPI was 0.19.0 in this environment. These steps use the GitHub release `v0.22.7`.
