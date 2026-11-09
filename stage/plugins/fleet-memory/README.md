@@ -26,7 +26,7 @@ In chat:
 When does dock GL-14 stop taking same-day freight?
 ```
 
-The desktop pane is `desktop/plugin.js`. It reads `GET /api/plugins/fleet-memory/summary` and shows store counts plus recent recalls. Open `desktop/fixture.html` when Hermes Desktop is not running. `?state=before` is the empty pane. The default shows one recall. Refresh on the empty pane fills the sample.
+The desktop pane is `desktop/plugin.js`. It polls `GET /api/plugins/fleet-memory/summary` every second. Recalls render as cards with the query, the note title, a snippet, and a score, on separate lines. The store label reads `local store` unless Notion is configured. Open `desktop/fixture.html` when Hermes Desktop is not running.
 
 If that route returns 404, `fleet-memory` is missing from `plugins.enabled`. Setting `memory.provider` alone does not mount the pane API. Run `hermes plugins enable fleet-memory`. The install command in `LIVE_DEMO.md` already passes `--enable`, so a 404 after that install means the enable step did not stay on.
 

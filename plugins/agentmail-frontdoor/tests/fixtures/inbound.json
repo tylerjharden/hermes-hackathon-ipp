@@ -1,7 +1,33 @@
 {
-  "thread_id": "thrd_fixture_1001",
-  "inbox_id": "ops",
-  "from": "vendor@example.com",
-  "subject": "Urgent invoice for dock GL-14",
-  "text": "Please confirm the urgent invoice for the generator shipment on dock GL-14."
+  "primary": {
+    "thread_id": "thrd_harborline_1842",
+    "inbox_id": "ops",
+    "from": "maria.chen@harborline.example",
+    "from_name": "Maria Chen",
+    "vendor": "Harborline Logistics",
+    "subject": "Urgent invoice 1842 for the dock GL-14 generator move",
+    "text": "Maria Chen at Harborline Logistics. Urgent invoice 1842 covers the generator move off dock GL-14. Please confirm before Friday's freight cutoff."
+  },
+  "threads": [
+    {
+      "thread_id": "thrd_harborline_1842",
+      "inbox_id": "ops",
+      "from": "maria.chen@harborline.example",
+      "from_name": "Maria Chen",
+      "vendor": "Harborline Logistics",
+      "subject": "Urgent invoice 1842 for the dock GL-14 generator move",
+      "text": "Maria Chen at Harborline Logistics. Urgent invoice 1842 covers the generator move off dock GL-14. Please confirm before Friday's freight cutoff."
+    },
+    {
+      "thread_id": "thrd_northpier_220",
+      "inbox_id": "ops",
+      "from": "devon.okonkwo@northpier.example",
+      "from_name": "Devon Okonkwo",
+      "vendor": "North Pier Freight",
+      "subject": "Quote for the weekend reefer lane",
+      "text": "Devon Okonkwo at North Pier Freight. Please quote the weekend reefer lane out of dock GL-14.",
+      "seed_label": "needs-approval",
+      "draft_body": "Devon, the weekend reefer lane out of dock GL-14 is open. This draft is waiting for a person. It has not been sent."
+    }
+  ]
 }

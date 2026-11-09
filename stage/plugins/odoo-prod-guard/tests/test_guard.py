@@ -123,7 +123,7 @@ def test_register_and_hook_kwargs(home):
 
 def test_plugin_js_has_no_forbidden_surface():
     text = (PLUGIN / "desktop" / "plugin.js").read_text()
-    for banned in ("eval(", "new Function", "import(", "data-slot", "window.hermesDesktop"):
+    for banned in ("eval(", "new Function", "import(", "data-slot", "window.hermesDesktop", "fixture"):
         assert banned not in text
     proc = subprocess.run(
         [
@@ -143,6 +143,18 @@ def test_plugin_js_has_no_forbidden_surface():
 
 def test_dashboard_module_parses():
     ast.parse((PLUGIN / "dashboard" / "plugin_api.py").read_text())
+
+
+def test_pane_audit_does_not_execute(home):
+    log = PKG.log.GateLog()
+    events = log.recent()
+    gated = next(event for event in events if event["decision"] == "approve")
+    result = log.audit(gated["id"], "deny")
+    assert result["executed"] is False
+    assert "not executed" in result["event"]["audit"]
+    summary = log.read_summary()
+    assert summary["data_label"] == "demo data"
+    assert "Harborline Logistics" in json.dumps(summary["events"])
 
 
 def test_demo_script(home):

@@ -103,7 +103,7 @@ def test_second_initialize_is_rejected(tmp_path):
 
 def test_plugin_js_and_dashboard_parse():
     text = (PLUGIN / "desktop" / "plugin.js").read_text()
-    for banned in ("eval(", "new Function", "import(", "data-slot", "window.hermesDesktop"):
+    for banned in ("eval(", "new Function", "import(", "data-slot", "window.hermesDesktop", "fixture"):
         assert banned not in text
     ast.parse((PLUGIN / "dashboard" / "plugin_api.py").read_text())
     proc = subprocess.run(
@@ -120,6 +120,34 @@ def test_plugin_js_and_dashboard_parse():
     )
     assert proc.returncode == 0, proc.stderr
     assert '"area":"panes"' in proc.stdout
+
+
+def test_recall_cards_keep_query_and_title_apart(tmp_path):
+    provider = PKG.provider.FleetMemoryProvider(token="mock")
+    provider.initialize("s1", hermes_home=str(tmp_path))
+    text = provider.prefetch("freight cutoff")
+    recalls = provider._store.recent_recalls()
+    assert recalls[0]["source"] == "auto"
+    assert recalls[0]["query"] == "freight cutoff"
+    hit = next(item for item in recalls[0]["hits"] if item["id"] == "dock-cutoff")
+    assert hit["title"] == "Same-day dock cutoff"
+    assert hit["score"] >= 1
+    assert "freight cutoffdock-cutoff" not in json.dumps(recalls[0])
+    assert "local store" in text
+    assert "score" in text
+    ingested = json.loads(provider.handle_tool_call(
+        "fleet_memory_ingest",
+        {
+            "id": "harborline-hold",
+            "title": "Harborline hold",
+            "body": "Maria Chen asked to hold the GL-14 generator until the invoice is confirmed.",
+            "tags": ["harborline"],
+        },
+    ))
+    found = json.loads(provider.handle_tool_call("fleet_memory_search", {"query": "Harborline hold", "limit": 3}))
+    assert found["notes"][0]["id"] == ingested["note"]["id"]
+    assert found["notes"][0]["score"] >= 1
+    provider.shutdown()
 
 
 def test_demo_script(tmp_path):

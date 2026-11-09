@@ -6,7 +6,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 router = APIRouter()
 _ROOT = Path(__file__).resolve().parents[1]
@@ -29,7 +30,21 @@ def _package():
     return module
 
 
+class Decision(BaseModel):
+    id: int
+    decision: str
+
+
 @router.get("/summary")
 async def summary():
     log = _package().log.GateLog()
     return log.read_summary()
+
+
+@router.post("/decision")
+async def decision(body: Decision):
+    log = _package().log.GateLog()
+    try:
+        return log.audit(body.id, body.decision)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

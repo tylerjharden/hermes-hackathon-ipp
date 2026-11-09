@@ -71,8 +71,24 @@ class Ledger:
             """
         )
         columns = {row[1] for row in self._conn.execute("PRAGMA table_info(threads)")}
-        if "body" not in columns:
-            self._conn.execute("ALTER TABLE threads ADD COLUMN body TEXT NOT NULL DEFAULT ''")
+        for name, decl in (
+            ("body", "TEXT NOT NULL DEFAULT ''"),
+            ("from_name", "TEXT NOT NULL DEFAULT ''"),
+            ("from_addr", "TEXT NOT NULL DEFAULT ''"),
+        ):
+            if name not in columns:
+                self._conn.execute(f"ALTER TABLE threads ADD COLUMN {name} {decl}")
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                thread_id TEXT NOT NULL,
+                at TEXT NOT NULL,
+                event TEXT NOT NULL,
+                detail TEXT NOT NULL
+            )
+            """
+        )
         self._conn.commit()
 
     def close(self) -> None:
@@ -85,32 +101,68 @@ class Ledger:
             ).fetchone()
         return _row(row) if row else None
 
-    def claim(self, thread_id: str, inbox_id: str, subject: str = "", body: str = "") -> dict:
+    def claim(
+        self,
+        thread_id: str,
+        inbox_id: str,
+        subject: str = "",
+        body: str = "",
+        from_name: str = "",
+        from_addr: str = "",
+    ) -> dict:
         with self._lock:
             self._conn.execute(
                 """
-                INSERT INTO threads (thread_id, inbox_id, label, subject, body, updated_at)
-                VALUES (?, ?, 'triage', ?, ?, ?)
+                INSERT INTO threads (
+                    thread_id, inbox_id, label, subject, body, from_name, from_addr, updated_at
+                )
+                VALUES (?, ?, 'triage', ?, ?, ?, ?, ?)
                 ON CONFLICT(thread_id) DO UPDATE SET
                     subject = CASE WHEN excluded.subject != '' THEN excluded.subject ELSE threads.subject END,
                     body = CASE WHEN excluded.body != '' THEN excluded.body ELSE threads.body END,
+                    from_name = CASE WHEN excluded.from_name != '' THEN excluded.from_name ELSE threads.from_name END,
+                    from_addr = CASE WHEN excluded.from_addr != '' THEN excluded.from_addr ELSE threads.from_addr END,
                     updated_at = excluded.updated_at
                 """,
-                (thread_id, inbox_id, subject, body, _now()),
+                (thread_id, inbox_id, subject, body, from_name, from_addr, _now()),
             )
+            self._history_unlocked(thread_id, "claim", "Claimed into triage.")
             self._conn.commit()
             row = self._conn.execute(
                 "SELECT * FROM threads WHERE thread_id = ?", (thread_id,)
             ).fetchone()
         return _row(row)
 
+    def list_threads(self) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM threads ORDER BY updated_at DESC, thread_id ASC"
+            ).fetchall()
+        return [_row(row) for row in rows]
+
+    def history(self, thread_id: str, limit: int = 20) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT at, event, detail FROM history
+                WHERE thread_id = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (thread_id, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def classify(self, thread_id: str, classification: dict) -> dict:
         payload = json.dumps(classification, sort_keys=True)
         with self._lock:
-            cur = self._conn.execute(
+            cur =             self._conn.execute(
                 "UPDATE threads SET classification = ?, updated_at = ? WHERE thread_id = ?",
                 (payload, _now(), thread_id),
             )
+            intent = str(classification.get("intent") or "general")
+            urgency = str(classification.get("urgency") or "normal")
+            self._history_unlocked(thread_id, "classify", f"Classified {intent}, {urgency}.")
             self._conn.commit()
             if cur.rowcount == 0:
                 raise LedgerError("not_found", thread_id=thread_id)
@@ -173,6 +225,7 @@ class Ledger:
                     "UPDATE threads SET label = ?, worker = ?, updated_at = ? WHERE thread_id = ?",
                     (label, worker, _now(), thread_id),
                 )
+            self._history_unlocked(thread_id, event, f"Label is now {label}.")
             self._conn.commit()
             stored = self._conn.execute(
                 "SELECT * FROM threads WHERE thread_id = ?", (thread_id,)
@@ -198,6 +251,18 @@ class Ledger:
                 "SELECT * FROM threads WHERE thread_id = ?", (thread_id,)
             ).fetchone()
         return _row(stored)
+
+    def note(self, thread_id: str, event: str, detail: str) -> None:
+        self._require(thread_id)
+        with self._lock:
+            self._history_unlocked(thread_id, event, detail)
+            self._conn.commit()
+
+    def _history_unlocked(self, thread_id: str, event: str, detail: str) -> None:
+        self._conn.execute(
+            "INSERT INTO history (thread_id, at, event, detail) VALUES (?, ?, ?, ?)",
+            (thread_id, _now(), event, detail),
+        )
 
 
 def _row(row: sqlite3.Row) -> dict:

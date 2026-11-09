@@ -46,6 +46,11 @@ class NoteStore:
             )
             """
         )
+        columns = {row[1] for row in self._conn.execute("PRAGMA table_info(recalls)")}
+        if "source" not in columns:
+            self._conn.execute("ALTER TABLE recalls ADD COLUMN source TEXT NOT NULL DEFAULT 'tool'")
+        if "hits" not in columns:
+            self._conn.execute("ALTER TABLE recalls ADD COLUMN hits TEXT NOT NULL DEFAULT '[]'")
         self._conn.execute(
             """
             CREATE TABLE IF NOT EXISTS turns (
@@ -112,30 +117,49 @@ class NoteStore:
             hay = " ".join([note["title"], note["body"], " ".join(note["tags"])]).lower()
             score = sum(1 for token in tokens if token in hay) if tokens else 1
             if score:
+                note["score"] = score
+                note["snippet"] = note["body"][:160]
                 ranked.append((score, note))
         ranked.sort(key=lambda item: (-item[0], item[1]["id"]))
         return [note for _, note in ranked[:limit]]
 
-    def record_recall(self, query: str, hit_ids: list[str]) -> None:
+    def record_recall(self, query: str, hit_ids: list[str], source: str = "tool", hits: list[dict] | None = None) -> None:
+        cards = []
+        for hit in hits or []:
+            cards.append({
+                "id": hit.get("id"),
+                "title": hit.get("title") or "",
+                "snippet": hit.get("snippet") or (hit.get("body") or "")[:160],
+                "score": hit.get("score") or 0,
+            })
         with self._lock:
             self._conn.execute(
-                "INSERT INTO recalls (at, query, hit_ids) VALUES (?, ?, ?)",
-                (_now(), query, json.dumps(hit_ids)),
+                "INSERT INTO recalls (at, query, hit_ids, source, hits) VALUES (?, ?, ?, ?, ?)",
+                (_now(), query, json.dumps(hit_ids), source, json.dumps(cards)),
             )
             self._conn.commit()
 
     def recent_recalls(self, limit: int = 10) -> list[dict]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT at, query, hit_ids FROM recalls ORDER BY id DESC LIMIT ?",
+                "SELECT at, query, hit_ids, source, hits FROM recalls ORDER BY id DESC LIMIT ?",
                 (limit,),
             ).fetchall()
         found = []
         for row in rows:
             item = dict(row)
             item["hit_ids"] = json.loads(item["hit_ids"])
+            item["hits"] = json.loads(item["hits"] or "[]")
             found.append(item)
         return found
+
+    def recent_notes(self, limit: int = 8) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM notes ORDER BY updated_at DESC, id ASC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [_note(row) for row in rows]
 
     def append_turn(self, session_id: str, user_text: str, assistant_text: str) -> None:
         with self._lock:
@@ -170,14 +194,19 @@ def open_profile_store() -> NoteStore:
 
 
 def format_recall(notes: list[dict], budget_chars: int) -> str:
-    lines = ["Fleet notes:"]
+    lines = ["Fleet notes from the local store:"]
     used = len(lines[0])
+    shown = 0
     for note in notes:
-        line = f"- {note['title']}: {note['body']}"
+        line = f"- {note['title']} (score {note.get('score', 0)}): {note['body']}"
         if used + len(line) + 1 > budget_chars:
             break
         lines.append(line)
         used += len(line) + 1
-    if len(lines) == 1:
+        shown += 1
+    if shown == 0:
         return ""
+    closer = f"Matched {shown} local notes. Answer with the titles and the cutoff, not a single bare line."
+    if used + len(closer) + 1 <= budget_chars:
+        lines.append(closer)
     return "\n".join(lines)

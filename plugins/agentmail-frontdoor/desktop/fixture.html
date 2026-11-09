@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Front door demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.4 "Iowan Old Style", Palatino, serif; background: #efeae2; color: #1c1915; }
+    .shell { display: flex; min-height: 100vh; }
+    .chat { flex: 1; padding: 24px; color: #6b645b; }
+    .pane { width: 320px; background: #f7f4ee; border-left: 1px solid #ddd4c6; padding: 16px; }
+    h1 { font-size: 18px; margin: 0; }
+    h2 { font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
+    .row { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+    .chip { display: inline-block; border-radius: 999px; padding: 2px 8px; margin-right: 6px; font: 12px/1.4 ui-monospace, monospace; }
+    .wait { background: #ffedd5; color: #9a3412; }
+    .triage { background: #e7e5e4; color: #1c1915; }
+    .sales { background: #fce7f3; color: #9d174d; }
+    .normal { background: #e7e5e4; }
+    .card { background: #fff; border: 1px solid #e4dccf; padding: 8px; }
+    .item { padding: 8px 0; border-top: 1px solid #e4dccf; }
+    .muted { color: #6b645b; }
+    button { font: inherit; padding: 6px 10px; }
+    @media (max-width: 700px) { .chat { display: none; } .pane { width: 100%; border: 0; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <main class="chat">Chat stays on the left. The inbox queue is the right column. Demo data only.</main>
+    <aside class="pane">
+      <div class="row"><h1>Front door</h1><span class="chip normal">demo data</span></div>
+      <p class="muted">Watching the inbox · <span id="age">0</span>s</p>
+      <h2>Inbox</h2>
+      <div class="item"><span class="chip wait">needs-approval</span><div>Devon Okonkwo</div><div class="muted">Quote for the weekend reefer lane</div></div>
+      <div class="item"><span class="chip triage">triage</span><div>Maria Chen</div><div class="muted">Urgent invoice 1842 for the dock GL-14 generator move</div></div>
+      <h2>Classification</h2>
+      <span class="chip sales">sales</span><span class="chip normal">normal</span>
+      <p>Devon Okonkwo at North Pier Freight. Please quote the weekend reefer lane out of dock GL-14.</p>
+      <h2>Draft</h2>
+      <p class="card">Devon, the weekend reefer lane out of dock GL-14 is open. This draft is waiting for a person. It has not been sent.</p>
+      <p class="muted">To devon.okonkwo@northpier.example. Not sent.</p>
+      <button>Approve</button>
+      <button>Deny</button>
+      <h2>History</h2>
+      <div class="item"><div>Waiting in the pane. The draft has not been sent.</div><div class="muted">demo ledger</div></div>
+    </aside>
+  </div>
+  <script>
+    let n = 0
+    setInterval(() => { n += 1; document.getElementById('age').textContent = String(n) }, 1000)
+  </script>
+</body>
+</html>

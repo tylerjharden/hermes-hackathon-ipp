@@ -11,6 +11,7 @@ provides_tools:
   - am_classify
   - am_route
   - am_draft_reply
+  - am_queue
   - am_ledger_upsert
   - am_ledger_get
 provides_hooks:

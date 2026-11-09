@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .client import AgentMailClient, read_secret
@@ -43,6 +44,31 @@ def _error(exc: Exception) -> str:
     return _dump({"ok": False, "error": exc.__class__.__name__, "message": str(exc)})
 
 
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def pulse(line: str) -> None:
+    try:
+        target = data_dir(PLUGIN_ID) / "status.json"
+        target.write_text(json.dumps({"at": _now(), "line": line}))
+    except Exception:
+        return
+
+
+def read_status() -> dict:
+    try:
+        target = data_dir(PLUGIN_ID) / "status.json"
+    except Exception:
+        return {"at": "", "line": "Watching the inbox"}
+    if not target.is_file():
+        return {"at": "", "line": "Watching the inbox"}
+    try:
+        return json.loads(target.read_text())
+    except Exception:
+        return {"at": "", "line": "Watching the inbox"}
+
+
 def _ledger() -> Ledger:
     return Ledger(data_dir(PLUGIN_ID) / "ledger.db")
 
@@ -67,12 +93,20 @@ def _sync_label(client: AgentMailClient, inbox_id: str, thread_id: str, label: s
 def make_handlers(config_fn):
     def claim(args: dict, **kwargs) -> str:
         try:
+            pulse("Claiming a thread into the inbox queue")
             thread_id = str(args["thread_id"]).strip()
             inbox_id = str(args.get("inbox_id") or config_fn().get("inbox_id") or "ops").strip()
             subject = str(args.get("subject") or "")
             ledger = _ledger()
             previous = ledger.get(thread_id)
-            row = ledger.claim(thread_id, inbox_id, subject)
+            row = ledger.claim(
+                thread_id,
+                inbox_id,
+                subject,
+                str(args.get("body") or ""),
+                str(args.get("from_name") or ""),
+                str(args.get("from_addr") or args.get("from") or ""),
+            )
             client = _client(config_fn())
             if client.mode == "live":
                 client.get_thread(inbox_id, thread_id)
@@ -90,6 +124,7 @@ def make_handlers(config_fn):
 
     def classify(args: dict, **kwargs) -> str:
         try:
+            pulse("Classifying the open thread")
             thread_id = str(args["thread_id"]).strip()
             ledger = _ledger()
             row = ledger.get(thread_id)
@@ -106,6 +141,7 @@ def make_handlers(config_fn):
 
     def route(args: dict, **kwargs) -> str:
         try:
+            pulse(f"Routing to {args.get('worker') or 'a worker'}")
             thread_id = str(args["thread_id"]).strip()
             worker = str(args["worker"]).strip()
             ledger = _ledger()
@@ -127,6 +163,7 @@ def make_handlers(config_fn):
 
     def draft_reply(args: dict, **kwargs) -> str:
         try:
+            pulse("Writing a draft. Nothing is sent.")
             if args.get("send") is True:
                 return _dump({
                     "ok": False,
@@ -152,6 +189,7 @@ def make_handlers(config_fn):
             )
             draft_id = str(created.get("draft_id") or created.get("id") or "")
             stored = ledger.draft(thread_id, body, recipient, draft_id)
+            ledger.note(thread_id, "draft", "Draft stored. It has not been sent.")
             warning = _sync_label(
                 client,
                 stored["inbox_id"],
@@ -190,6 +228,26 @@ def make_handlers(config_fn):
         except Exception as exc:
             return _error(exc)
 
+    def queue(args: dict, **kwargs) -> str:
+        try:
+            pulse("Reading the inbox queue")
+            ledger = _ledger()
+            threads = ledger.list_threads()
+            ledger.close()
+            slim = []
+            for row in threads:
+                slim.append({
+                    "thread_id": row["thread_id"],
+                    "label": row["label"],
+                    "subject": row["subject"],
+                    "from_name": row.get("from_name") or "",
+                    "from_addr": row.get("from_addr") or "",
+                    "vendor": (row.get("classification") or {}).get("vendor") if isinstance(row.get("classification"), dict) else "",
+                })
+            return _dump({"ok": True, "data_label": "demo data", "threads": slim})
+        except Exception as exc:
+            return _error(exc)
+
     def ledger_get(args: dict, **kwargs) -> str:
         try:
             thread_id = str(args["thread_id"]).strip()
@@ -208,6 +266,7 @@ def make_handlers(config_fn):
         "am_route": route,
         "am_draft_reply": draft_reply,
         "am_ledger_upsert": ledger_upsert,
+        "am_queue": queue,
         "am_ledger_get": ledger_get,
     }
 
@@ -277,6 +336,12 @@ SCHEMAS = {
         },
         ["thread_id"],
     ),
+    "am_queue": _schema(
+        "am_queue",
+        "List the local inbox queue. Demo rows are labeled demo data. Nothing is sent.",
+        {},
+        [],
+    ),
     "am_ledger_get": _schema(
         "am_ledger_get",
         "Read one ledger row.",
@@ -286,27 +351,114 @@ SCHEMAS = {
 }
 
 
-def ensure_fixture_thread() -> dict | None:
-    """Claim the shipped inbound fixture once per profile. Later calls leave the row alone."""
+def load_demo_file(path: Path | None = None) -> dict:
+    fixture = path or Path(__file__).resolve().parent / "tests" / "fixtures" / "inbound.json"
+    return json.loads(fixture.read_text())
+
+
+def load_demo_threads(path: Path | None = None) -> list[dict]:
+    payload = load_demo_file(path)
+    if "threads" in payload:
+        return list(payload["threads"])
+    return [payload]
+
+
+def load_fixture(path: Path | None = None) -> dict:
+    payload = load_demo_file(path)
+    if "primary" in payload:
+        return payload["primary"]
+    return payload
+
+
+def seed_demo(ledger: Ledger) -> list[dict]:
+    """Insert missing demo threads. Existing rows are left alone."""
+    seeded = []
+    for thread in load_demo_threads():
+        thread_id = thread["thread_id"]
+        if ledger.get(thread_id) is not None:
+            continue
+        ledger.claim(
+            thread_id,
+            thread.get("inbox_id") or "ops",
+            thread.get("subject") or "",
+            thread.get("text") or "",
+            thread.get("from_name") or "",
+            thread.get("from") or "",
+        )
+        if thread.get("seed_label") == "needs-approval":
+            ledger.classify(thread_id, classify_text(thread.get("subject") or "", thread.get("text") or ""))
+            draft_body = thread.get("draft_body") or "Draft waiting for a person. It has not been sent."
+            ledger.draft(
+                thread_id,
+                draft_body,
+                thread.get("from") or "",
+                f"draft_mock_{thread_id}",
+            )
+            ledger.note(thread_id, "awaiting", "Waiting in the pane. The draft has not been sent.")
+        seeded.append(ledger.get(thread_id))
+    return seeded
+
+
+def ensure_demo_threads() -> list[dict] | None:
     try:
         ledger = _ledger()
     except RuntimeError:
         return None
     try:
-        fixture = load_fixture()
-        existing = ledger.get(fixture["thread_id"])
-        if existing is not None:
-            return existing
-        return ledger.claim(
-            fixture["thread_id"],
-            fixture["inbox_id"],
-            fixture["subject"],
-            fixture["text"],
-        )
+        seed_demo(ledger)
+        return ledger.list_threads()
     finally:
         ledger.close()
 
 
-def load_fixture(path: Path | None = None) -> dict:
-    fixture = path or Path(__file__).resolve().parent / "tests" / "fixtures" / "inbound.json"
-    return json.loads(fixture.read_text())
+def ensure_fixture_thread() -> dict | None:
+    rows = ensure_demo_threads()
+    if not rows:
+        return None
+    primary = load_fixture()["thread_id"]
+    for row in rows:
+        if row["thread_id"] == primary:
+            return row
+    return rows[0]
+
+
+def board(thread_id: str = "") -> dict:
+    ledger = _ledger()
+    try:
+        seed_demo(ledger)
+        threads = ledger.list_threads()
+        focus = thread_id
+        if not focus:
+            waiting = next((row for row in threads if row["label"] == "needs-approval"), None)
+            focus = (waiting or (threads[0] if threads else {})).get("thread_id", "")
+        selected = ledger.get(focus) if focus else None
+        history = ledger.history(focus) if focus else []
+        return {
+            "data_label": "demo data",
+            "status": read_status(),
+            "server_time": _now(),
+            "threads": threads,
+            "focus": focus,
+            "selected": selected,
+            "history": history,
+        }
+    finally:
+        ledger.close()
+
+
+def pane_decision(thread_id: str, decision: str) -> dict:
+    """Record a pane decision. This never sends the draft."""
+    if decision not in {"approve", "deny"}:
+        raise LedgerError("unknown_decision", decision=decision)
+    pulse("Recording a pane decision. The draft is not sent.")
+    ledger = _ledger()
+    try:
+        if decision == "approve":
+            stored = ledger.apply_event(thread_id, "approve")
+            ledger.note(thread_id, "pane-approve", "Approved in the pane. The draft was not sent.")
+        else:
+            stored = ledger.apply_event(thread_id, "return")
+            ledger.note(thread_id, "pane-deny", "Denied in the pane. The draft was not sent.")
+        return {"ok": True, "sent": False, "decision": decision, "thread": stored}
+    finally:
+        ledger.close()

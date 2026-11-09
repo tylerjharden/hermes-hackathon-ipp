@@ -109,8 +109,9 @@ class FleetMemoryProvider(MemoryProvider):
 
     def prefetch(self, query: str, *, session_id: str = "") -> str:
         store = self._require()
+        _pulse(store, f"Auto-recall for {query}")
         notes = store.search(query, self._budget)
-        store.record_recall(query, [note["id"] for note in notes])
+        store.record_recall(query, [note["id"] for note in notes], source="auto", hits=notes)
         return format_recall(notes, BUDGET_CHARS)
 
     def sync_turn(self, user_content, assistant_content, *, session_id: str = "", messages=None) -> None:
@@ -143,9 +144,10 @@ class FleetMemoryProvider(MemoryProvider):
         query = str(args.get("query") or "")
         limit = int(args.get("limit") or self._budget)
         store = self._require()
+        _pulse(store, f"Searching the local store for {query}")
         notes = store.search(query, limit)
-        store.record_recall(query, [note["id"] for note in notes])
-        return json.dumps({"ok": True, "backend": "notion" if self._token else "fixture", "notes": notes})
+        store.record_recall(query, [note["id"] for note in notes], source="tool", hits=notes)
+        return json.dumps({"ok": True, "backend": "notion" if self._token else "local", "notes": notes})
 
     def _status(self, args: dict) -> str:
         counts = self._require().counts()
@@ -160,12 +162,14 @@ class FleetMemoryProvider(MemoryProvider):
         tags = args.get("tags") or []
         if isinstance(tags, str):
             tags = [part.strip() for part in tags.split(",") if part.strip()]
-        note = self._require().ingest(
+        store = self._require()
+        note = store.ingest(
             str(args["id"]),
             str(args["title"]),
             str(args["body"]),
             [str(tag) for tag in tags],
         )
+        _pulse(store, f"Ingested {note['title']} into the local store")
         return json.dumps({"ok": True, "note": note})
 
 
@@ -174,9 +178,10 @@ def tool_search(args: dict, **kwargs) -> str:
     try:
         query = str((args or {}).get("query") or "")
         limit = int((args or {}).get("limit") or 3)
+        _pulse(store, f"Searching the local store for {query}")
         notes = store.search(query, limit)
-        store.record_recall(query, [note["id"] for note in notes])
-        return json.dumps({"ok": True, "backend": "fixture", "notes": notes})
+        store.record_recall(query, [note["id"] for note in notes], source="tool", hits=notes)
+        return json.dumps({"ok": True, "backend": "local", "notes": notes})
     finally:
         store.close()
 
@@ -189,7 +194,7 @@ def tool_status(args: dict, **kwargs) -> str:
         return json.dumps({
             "ok": True,
             "provider": "fleet-memory",
-            "backend": "notion" if token else "fixture",
+            "backend": "notion" if token else "local",
             "notion": token,
             **counts,
         })
@@ -209,7 +214,8 @@ def tool_ingest(args: dict, **kwargs) -> str:
             str(args["body"]),
             [str(tag) for tag in tags],
         )
-        return json.dumps({"ok": True, "backend": "fixture", "note": note})
+        _pulse(store, f"Ingested {note['title']} into the local store")
+        return json.dumps({"ok": True, "backend": "local", "note": note})
     finally:
         store.close()
 
@@ -219,6 +225,15 @@ TOOL_HANDLERS = {
     "fleet_memory_status": tool_status,
     "fleet_memory_ingest": tool_ingest,
 }
+
+
+def _pulse(store: NoteStore, line: str) -> None:
+    try:
+        from datetime import datetime, timezone
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        (store.root / "status.json").write_text(json.dumps({"at": stamp, "line": line}))
+    except Exception:
+        return
 
 
 def _refresh_notion(token: str, query: str, store: NoteStore) -> None:

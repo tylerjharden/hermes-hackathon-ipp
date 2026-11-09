@@ -38,16 +38,54 @@ class GateLog:
             )
             """
         )
+        columns = {row[1] for row in self._conn.execute("PRAGMA table_info(gate_events)")}
+        if "preview" not in columns:
+            self._conn.execute("ALTER TABLE gate_events ADD COLUMN preview TEXT NOT NULL DEFAULT ''")
+        if "audit" not in columns:
+            self._conn.execute("ALTER TABLE gate_events ADD COLUMN audit TEXT NOT NULL DEFAULT ''")
+        self._conn.commit()
+        count = self._conn.execute("SELECT COUNT(*) AS n FROM gate_events").fetchone()["n"]
+        if count == 0:
+            self._seed_demo()
+            self.write_summary("prod", ["account.move:action_post"])
+
+    def _seed_demo(self) -> None:
+        samples = (
+            (
+                "prod",
+                "account.move",
+                "action_post",
+                "allowed",
+                "Routine production write account.move.action_post.",
+                '{"partner":"Harborline Logistics","move":"INV-1842","amount":"18420.00"}',
+            ),
+            (
+                "prod",
+                "res.partner",
+                "unlink",
+                "approve",
+                "Production write res.partner.unlink is not on the routine allowlist.",
+                '{"partner":"North Pier Freight","id":220}',
+            ),
+        )
+        for env, model, method, decision, message, preview in samples:
+            self._conn.execute(
+                """
+                INSERT INTO gate_events (at, env, model, method, decision, message, preview, audit)
+                VALUES (?, ?, ?, ?, ?, ?, ?, '')
+                """,
+                (_now(), env, model, method, decision, message, preview),
+            )
         self._conn.commit()
 
-    def record(self, env: str, model: str, method: str, decision: str, message: str) -> None:
+    def record(self, env: str, model: str, method: str, decision: str, message: str, preview: str = "") -> None:
         with self._lock:
             self._conn.execute(
                 """
-                INSERT INTO gate_events (at, env, model, method, decision, message)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO gate_events (at, env, model, method, decision, message, preview, audit)
+                VALUES (?, ?, ?, ?, ?, ?, ?, '')
                 """,
-                (_now(), env, model, method, decision, message),
+                (_now(), env, model, method, decision, message, preview),
             )
             self._conn.execute(
                 """
@@ -60,10 +98,35 @@ class GateLog:
     def recent(self, limit: int = 20) -> list[dict]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT at, env, model, method, decision, message FROM gate_events ORDER BY id DESC LIMIT ?",
+                """
+                SELECT id, at, env, model, method, decision, message, preview, audit
+                FROM gate_events ORDER BY id DESC LIMIT ?
+                """,
                 (limit,),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def audit(self, event_id: int, decision: str) -> dict:
+        if decision not in {"approve", "deny"}:
+            raise ValueError("decision")
+        note = "Recorded in the pane. The write was not executed."
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE gate_events SET audit = ? WHERE id = ?",
+                (f"{decision}: {note}", event_id),
+            )
+            self._conn.commit()
+            if cur.rowcount == 0:
+                raise ValueError("not_found")
+            row = self._conn.execute(
+                """
+                SELECT id, at, env, model, method, decision, message, preview, audit
+                FROM gate_events WHERE id = ?
+                """,
+                (event_id,),
+            ).fetchone()
+        pulse(f"Pane {decision} recorded. No write was executed.")
+        return {"ok": True, "executed": False, "event": dict(row)}
 
     def write_summary(self, env: str, allowlist: list[str]) -> None:
         payload = {"env": env, "routine_allowlist": allowlist, "events": self.recent()}
@@ -80,4 +143,30 @@ class GateLog:
         stored["events"] = events
         from .client import current_backend
         stored["backend"] = current_backend()
+        stored["data_label"] = "live" if stored["backend"] == "live" else "demo data"
+        stored["status"] = read_status(self.root)
+        stored["server_time"] = _now()
         return stored
+
+
+def pulse(line: str, root: Path | None = None) -> None:
+    try:
+        base = root or data_dir(PLUGIN_ID)
+        base.mkdir(parents=True, exist_ok=True)
+        (base / "status.json").write_text(json.dumps({"at": _now(), "line": line}))
+    except Exception:
+        return
+
+
+def read_status(root: Path | None = None) -> dict:
+    try:
+        base = root or data_dir(PLUGIN_ID)
+        target = base / "status.json"
+    except Exception:
+        return {"at": "", "line": "Watching the production gate"}
+    if not target.is_file():
+        return {"at": "", "line": "Watching the production gate"}
+    try:
+        return json.loads(target.read_text())
+    except Exception:
+        return {"at": "", "line": "Watching the production gate"}

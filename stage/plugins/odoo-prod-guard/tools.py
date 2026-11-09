@@ -6,7 +6,7 @@ import json
 
 from .client import OdooClient, read_secret
 from .guard import decide, decision_label
-from .log import GateLog
+from .log import GateLog, pulse
 
 PLUGIN_TOOLS = ("odoo_call", "odoo_search_read", "odoo_version")
 
@@ -83,6 +83,7 @@ def gate_call(tool_name: str, args: dict | None, config: dict, log: GateLog | No
     if tool_name != "odoo_call":
         return None
     payload = args or {}
+    pulse(f"Checking {payload.get('model') or 'model'}.{payload.get('method') or 'method'}")
     model = str(payload.get("model") or "")
     method = str(payload.get("method") or "")
     if not model or not method:
@@ -102,7 +103,16 @@ def gate_call(tool_name: str, args: dict | None, config: dict, log: GateLog | No
             message = f"Dev write {model}.{method} is not gated."
         if label == "allowed":
             message = f"Routine production write {model}.{method}."
-        log.record(env, model, method, label, message)
+        preview = json.dumps(
+            {
+                "model": model,
+                "method": method,
+                "args": payload.get("args") or [],
+                "kwargs": payload.get("kwargs") or {},
+            },
+            default=str,
+        )[:500]
+        log.record(env, model, method, label, message, preview)
         log.write_summary(env, patterns)
     return directive
 

@@ -1,12 +1,25 @@
 import { useEffect, useState } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
 
+const ink = '#1c1915'
+const mute = '#6b645b'
+const line = '#e4dccf'
+
 function MemoryPane(props) {
   const [summary, setSummary] = useState({
     counts: { notes: 0, recalls: 0, turns: 0 },
     recalls: [],
+    notes: [],
+    data_label: 'local store',
+    status: { line: 'Watching the local store', at: '' },
     error: '',
   })
+  const [now, setNow] = useState(Date.now())
+
+  useEffect(() => {
+    const clock = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(clock)
+  }, [])
 
   useEffect(() => {
     let alive = true
@@ -15,16 +28,15 @@ function MemoryPane(props) {
         if (alive) setSummary(body)
       }).catch((err) => {
         if (alive) {
-          setSummary({
-            counts: { notes: 0, recalls: 0, turns: 0 },
-            recalls: [],
+          setSummary((prev) => ({
+            ...prev,
             error: err && err.message ? err.message : 'Gateway route unavailable',
-          })
+          }))
         }
       })
     }
     load()
-    const timer = setInterval(load, 3000)
+    const timer = setInterval(load, 1000)
     return () => {
       alive = false
       clearInterval(timer)
@@ -33,33 +45,71 @@ function MemoryPane(props) {
 
   const counts = summary.counts || { notes: 0, recalls: 0, turns: 0 }
   const recalls = summary.recalls || []
-  const noun = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
+  const notes = summary.notes || []
+  const age = summary.status && summary.status.at
+    ? Math.max(0, Math.round((now - Date.parse(summary.status.at)) / 1000))
+    : 0
+
   return jsxs('div', {
-    className: 'pane',
+    style: { color: ink, font: '14px/1.4 "Iowan Old Style", Palatino, serif' },
     children: [
       jsxs('header', {
-        className: 'pane-head',
+        style: { display: 'flex', justifyContent: 'space-between', gap: 8 },
         children: [
-          jsx('h1', { children: 'Fleet memory' }),
-          jsx('span', { className: 'muted', children: summary.backend === 'notion' ? 'notion' : 'fixture' }),
+          jsx('h1', { style: { fontSize: 18, margin: 0 }, children: 'Fleet memory' }),
+          jsx('span', {
+            style: { color: mute, font: '12px/1.4 ui-monospace, monospace' },
+            children: summary.data_label || 'local store',
+          }),
         ],
       }),
-      summary.error ? jsx('p', { className: 'error', children: summary.error }) : null,
-      jsx('h2', { children: 'Store' }),
       jsx('p', {
-        children: `${noun(counts.notes, 'note')}, ${noun(counts.recalls, 'recall')}, ${noun(counts.turns, 'turn')}`,
+        style: { color: mute },
+        children: `${(summary.status && summary.status.line) || 'Watching the local store'} · ${age}s`,
       }),
-      jsx('h2', { children: 'Recent recalls' }),
+      summary.error ? jsx('p', { style: { color: '#991b1b' }, children: summary.error }) : null,
+      jsx('p', { children: `${counts.notes} notes · ${counts.recalls} recalls · ${counts.turns} turns` }),
+      jsx('h2', { style: { fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase' }, children: 'Recall cards' }),
       recalls.length
+        ? recalls.map((recall) => jsxs('article', {
+            style: { borderTop: `1px solid ${line}`, padding: '8px 0' },
+            children: [
+              jsxs('div', {
+                style: { display: 'flex', justifyContent: 'space-between', gap: 8 },
+                children: [
+                  jsx('strong', { children: recall.query }),
+                  jsx('span', { style: { color: mute }, children: recall.source === 'auto' ? 'auto-recall' : 'search' }),
+                ],
+              }),
+              (recall.hits || []).map((hit) => jsxs('div', {
+                style: { background: '#fff', border: `1px solid ${line}`, padding: 8, marginTop: 6 },
+                children: [
+                  jsxs('div', {
+                    style: { display: 'flex', justifyContent: 'space-between', gap: 8 },
+                    children: [
+                      jsx('strong', { children: hit.title }),
+                      jsx('span', { children: `score ${hit.score}` }),
+                    ],
+                  }),
+                  jsx('p', { style: { margin: '4px 0 0' }, children: hit.snippet }),
+                ],
+              }, `${recall.at}-${hit.id}`)),
+            ],
+          }, `${recall.at}-${recall.query}`))
+        : jsx('p', { style: { color: mute }, children: 'No recalls yet.' }),
+      jsx('h2', { style: { fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase' }, children: 'Timeline' }),
+      notes.length
         ? jsx('ul', {
-            children: recalls.map((recall) => jsxs('li', {
+            style: { listStyle: 'none', padding: 0, margin: 0 },
+            children: notes.map((note) => jsxs('li', {
+              style: { padding: '6px 0', borderTop: `1px solid ${line}` },
               children: [
-                jsx('span', { children: recall.query }),
-                jsx('span', { className: 'muted', children: (recall.hit_ids || []).join(', ') }),
+                jsx('div', { children: note.title }),
+                jsx('div', { style: { color: mute }, children: note.updated_at }),
               ],
-            }, `${recall.at}-${recall.query}`)),
+            }, note.id)),
           })
-        : jsx('p', { className: 'muted', children: 'No recalls yet.' }),
+        : jsx('p', { style: { color: mute }, children: 'Local store is empty.' }),
     ],
   })
 }

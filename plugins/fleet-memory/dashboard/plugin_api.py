@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import sys
 from pathlib import Path
@@ -43,10 +44,22 @@ async def summary():
         token = ""
     if token == "mock":
         token = ""
+    status = {"at": "", "line": "Watching the local store"}
+    status_path = store.root / "status.json"
+    if status_path.is_file():
+        try:
+            status = json.loads(status_path.read_text())
+        except Exception:
+            status = status
+    from datetime import datetime, timezone
     payload = {
         "counts": store.counts(),
         "recalls": store.recent_recalls(),
-        "backend": "notion" if token else "fixture",
+        "notes": store.recent_notes(),
+        "backend": "notion" if token else "local",
+        "data_label": "notion" if token else "local store",
+        "status": status,
+        "server_time": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     store.close()
     return payload

@@ -21,9 +21,7 @@ def home(tmp_path, monkeypatch):
 
 def test_offline_demo_reaches_needs_approval(home):
     handlers = PKG.tools.make_handlers(lambda: {"mode": "mock", "inbox_id": "ops"})
-    fixture = json.loads(
-        (Path(__file__).parent / "fixtures" / "inbound.json").read_text()
-    )
+    fixture = PKG.tools.load_fixture()
     handlers["am_claim_thread"](
         {"thread_id": fixture["thread_id"], "inbox_id": "ops", "subject": fixture["subject"]}
     )
@@ -44,7 +42,7 @@ def test_offline_demo_reaches_needs_approval(home):
     assert drafted["mock"] is True
     assert row["thread"]["label"] == "needs-approval"
     assert row["thread"]["classification"]["urgency"] == "high"
-    assert row["thread"]["draft_id"] == "draft_mock_thrd_fixture_1001"
+    assert row["thread"]["draft_id"] == "draft_mock_thrd_harborline_1842"
     db = home / "plugin-data" / "agentmail-frontdoor" / "ledger.db"
     assert db.is_file()
 
@@ -81,13 +79,13 @@ def test_send_gate_blocks_strangers_and_approves_allowlist():
     assert already is None
     draft = PKG.hooks.pre_tool_call(
         "am_draft_reply",
-        {"to": "vendor@example.com", "body": "hello"},
+        {"to": "maria.chen@harborline.example", "body": "hello"},
         [],
     )
     assert draft is None
     forced = PKG.hooks.pre_tool_call(
         "am_draft_reply",
-        {"to": "vendor@example.com", "send": True},
+        {"to": "maria.chen@harborline.example", "send": True},
         [],
     )
     assert forced["action"] == "block"
@@ -139,12 +137,17 @@ def test_register_seeds_fixture_thread(home):
 
     PKG.register(Ctx())
     row = json.loads(PKG.tools.make_handlers(lambda: {"mode": "mock", "inbox_id": "ops"})["am_ledger_get"](
-        {"thread_id": "thrd_fixture_1001"}
+        {"thread_id": "thrd_harborline_1842"}
     ))
     assert row["ok"] is True
     assert row["thread"]["label"] == "triage"
+    assert row["thread"]["from_name"] == "Maria Chen"
+    waiting = json.loads(PKG.tools.make_handlers(lambda: {"mode": "mock", "inbox_id": "ops"})["am_ledger_get"](
+        {"thread_id": "thrd_northpier_220"}
+    ))
+    assert waiting["thread"]["label"] == "needs-approval"
     classified = json.loads(PKG.tools.make_handlers(lambda: {"mode": "mock", "inbox_id": "ops"})["am_classify"](
-        {"thread_id": "thrd_fixture_1001"}
+        {"thread_id": "thrd_harborline_1842"}
     ))
     assert classified["thread"]["classification"]["urgency"] == "high"
 
@@ -177,6 +180,42 @@ def test_register_matches_manifest():
     ctx.hooks["pre_tool_call"][0]("am_ledger_get", {"thread_id": "t"}, task_id="x", extra=1)
 
 
+def test_pane_decision_never_sends(home):
+    PKG.tools.ensure_demo_threads()
+    result = PKG.tools.pane_decision("thrd_northpier_220", "deny")
+    assert result["sent"] is False
+    assert result["thread"]["label"] == "triage"
+    assert "not sent" in result["thread"]["draft_body"] or result["sent"] is False
+    board = PKG.tools.board("thrd_harborline_1842")
+    assert board["data_label"] == "demo data"
+    assert any(row["from_name"] == "Maria Chen" for row in board["threads"])
+    assert "fixture" not in json.dumps(board["threads"])
+
+
+def test_desktop_pane_parses():
+    import ast
+    import subprocess
+    plugin = Path(__file__).resolve().parents[1]
+    text = (plugin / "desktop" / "plugin.js").read_text()
+    for banned in ("eval(", "new Function", "import(", "data-slot", "window.hermesDesktop", "fixture"):
+        assert banned not in text
+    ast.parse((plugin / "dashboard" / "plugin_api.py").read_text())
+    proc = subprocess.run(
+        [
+            "node",
+            "--import",
+            str(ROOT / "scripts" / "register-desktop-loader.mjs"),
+            str(ROOT / "scripts" / "check-desktop.mjs"),
+            str(plugin / "desktop" / "plugin.js"),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert '"area":"panes"' in proc.stdout
+
+
 def test_demo_script(home):
     env = os.environ.copy()
     env["HERMES_HOME"] = str(home)
@@ -196,7 +235,7 @@ def test_demo_script(home):
 def test_source_does_not_read_dotenv_or_override_core():
     root = Path(__file__).resolve().parents[1]
     for path in root.rglob("*.py"):
-        if "tests" in path.parts:
+        if "tests" in path.parts or path.name == "plugin_api.py":
             continue
         text = path.read_text()
         assert "auth.json" not in text

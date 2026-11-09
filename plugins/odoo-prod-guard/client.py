@@ -58,7 +58,7 @@ class OdooClient:
             return {
                 "mock": True,
                 "records": [
-                    {"id": 1, "model": model, "name": "GL-14 fixture", "domain": domain, "fields": fields}
+                    {"id": 1, "model": model, "name": "Harborline Logistics dock GL-14", "domain": domain, "fields": fields}
                 ][:limit or 1],
             }
         body = {"domain": domain, "fields": fields, "limit": limit}
