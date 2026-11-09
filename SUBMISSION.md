@@ -18,16 +18,16 @@ Deadline: Wednesday 2026-11-11 17:00 ET. This file is the copy for the form. Not
 
 The front door claims an inbound thread, classifies it, and creates an AgentMail draft. It does not send. A send to an address outside the allowlist is blocked. On first load the profile ledger already holds thread `thrd_fixture_1001`. In Hermes TUI, ask it to classify that thread and draft a reply to vendor@example.com, and not to send it. The row should land on `needs-approval` with `sent` false.
 
-Demo video (71.1s, live TUI; no Desktop pane by design): https://drive.google.com/file/d/1JzjfNoUgXnQf9JhWYwIJ7RDXRHGEuan4/view?usp=drivesdk
+Demo video:
 
 ## odoo-prod-guard
 
 Odoo JSON-2 reads always pass. With `env: prod`, a write that is not on `routine_allowlist` waits for Hermes approval. Unset `ODOO_*` values stay on fixture responses, including version `19.0-mock`, and do not open a socket. Set `plugins.entries.odoo-prod-guard.settings.env` to `prod` and `routine_allowlist` to `account.move:action_post`. In the TUI, ask for the Odoo version, then ask to unlink `res.partner`, and stop when Hermes asks for approval. The desktop pane is the right-hand Odoo guard. Enable it under Capabilities, Plugins. It polls recent gated calls.
 
-Demo video (66.5s, live TUI approval gate and Desktop prod-guard pane): https://drive.google.com/file/d/14YKSWNoK5TsGiLcgbucUUqjjps-MJfdv/view?usp=drivesdk
+Demo video:
 
 ## fleet-memory
 
 Fleet memory recalls local ops notes and, only when `NOTION_TOKEN` is a real token, searches Notion without creating or editing pages. Set `memory.provider` to `fleet-memory`. The seed file loads into `$HERMES_HOME/fleet-memory/notes.db` on first use. In the TUI, ask when dock GL-14 stops taking same-day freight. The answer is 14:30 America/New_York. The desktop pane is the right-hand Fleet memory pane, enabled the same way as the Odoo pane.
 
-Demo video (54.7s, live TUI and Desktop live recall): https://drive.google.com/file/d/1W3npsrTGApiR4XGdZq5aEStxt3sqOU-J/view?usp=drivesdk
+Demo video:
