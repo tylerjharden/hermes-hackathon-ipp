@@ -33,6 +33,7 @@ def _package():
 class Decision(BaseModel):
     thread_id: str
     decision: str
+    actor: str = "operator"
 
 
 @router.get("/board")
@@ -43,7 +44,7 @@ async def board(thread_id: str = ""):
 @router.post("/decision")
 async def decision(body: Decision):
     try:
-        return _package().tools.pane_decision(body.thread_id, body.decision)
+        return _package().tools.pane_decision(body.thread_id, body.decision, body.actor)
     except Exception as exc:
         code = getattr(exc, "code", "") or exc.__class__.__name__
         raise HTTPException(status_code=400, detail=code) from exc

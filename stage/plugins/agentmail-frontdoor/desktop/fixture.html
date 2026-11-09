@@ -20,7 +20,10 @@
     .card { background: #fff; border: 1px solid #e4dccf; padding: 8px; }
     .item { padding: 8px 0; border-top: 1px solid #e4dccf; }
     .muted { color: #6b645b; }
-    button { font: inherit; padding: 6px 10px; }
+    button { font: inherit; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+    button.primary { background: #1c1915; color: #f7f4ee; border: 0; }
+    button.secondary { background: #fff; color: #1c1915; border: 1px solid #1c1915; }
+    .picked { background: #fff; }
     @media (max-width: 700px) { .chat { display: none; } .pane { width: 100%; border: 0; } }
   </style>
 </head>
@@ -32,24 +35,42 @@
       <p class="muted">Watching the inbox · <span id="age">0</span>s</p>
       <h2>Inbox</h2>
       <div class="item"><span class="chip wait">needs-approval</span><div>Devon Okonkwo</div><div class="muted">Quote for the weekend reefer lane</div></div>
-      <div class="item"><span class="chip triage">triage</span><div>Maria Chen</div><div class="muted">Urgent invoice 1842 for the dock GL-14 generator move</div></div>
+      <div class="item picked"><span class="chip triage">triage</span><div>Maria Chen</div><div class="muted">Urgent invoice 1842 for the dock GL-14 generator move</div></div>
       <h2>Classification</h2>
       <span class="chip sales">sales</span><span class="chip normal">normal</span>
       <p>Devon Okonkwo at North Pier Freight. Please quote the weekend reefer lane out of dock GL-14.</p>
       <h2>Draft</h2>
       <p class="card">Devon, the weekend reefer lane out of dock GL-14 is open. This draft is waiting for a person. It has not been sent.</p>
       <h2>Send gate</h2>
-      <p>Awaiting approval. Not sent. Demo mode never sends.</p>
-      <p class="muted">To devon.okonkwo@northpier.example.</p>
-      <button>Approve</button>
-      <button>Deny</button>
+      <p id="send-state">Not sent. Demo mode never sends.</p>
+      <p class="muted">To maria.chen@harborline.example.</p>
+      <div style="display:flex;gap:8px;margin:8px 0">
+        <button class="primary" id="approve" type="button">Approve</button>
+        <button class="secondary" id="deny" type="button">Deny</button>
+      </div>
       <h2>History</h2>
-      <div class="item"><div>Waiting in the pane. The draft has not been sent.</div><div class="muted">demo ledger</div></div>
+      <div id="history">
+        <div class="item"><div>Draft stored. It has not been sent.</div><div class="muted">demo ledger</div></div>
+      </div>
     </aside>
   </div>
   <script>
     let n = 0
     setInterval(() => { n += 1; document.getElementById('age').textContent = String(n) }, 1000)
+    function addAudit(detail) {
+      const row = document.createElement('div')
+      row.className = 'item'
+      row.innerHTML = '<div></div><div class="muted">just now</div>'
+      row.firstChild.textContent = detail
+      document.getElementById('history').prepend(row)
+      document.getElementById('send-state').textContent = 'Not sent. Demo mode never sends.'
+    }
+    document.getElementById('approve').addEventListener('click', () => {
+      addAudit('Approved by operator - demo mode, not sent')
+    })
+    document.getElementById('deny').addEventListener('click', () => {
+      addAudit('Denied by operator - demo mode, not sent')
+    })
   </script>
 </body>
 </html>

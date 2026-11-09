@@ -253,13 +253,23 @@ def make_handlers(config_fn):
                 if not recipient:
                     raise LedgerError("missing_recipient", thread_id=thread_id)
                 who = row.get("from_name") or recipient
-                draft_body = f"{who}, this draft is waiting for a person. It has not been sent."
+                given_body = str(args.get("body") or "").strip()
+                if given_body:
+                    draft_body = given_body
+                elif text:
+                    draft_body = (
+                        f"{who}, replying about {subject or 'your note'}. {text} "
+                        "This draft was written from the thread. It has not been sent."
+                    )
+                else:
+                    draft_body = f"{who}, this draft was written from the thread. It has not been sent."
+                draft_subject = "Re: " + (subject or "thread")
                 client = _client(config_fn())
                 created = client.create_draft(
                     row["inbox_id"],
                     thread_id,
                     [recipient],
-                    "Re: " + (subject or "thread"),
+                    draft_subject,
                     draft_body,
                     ["needs-approval"],
                 )
@@ -267,8 +277,16 @@ def make_handlers(config_fn):
                 row = ledger.draft(thread_id, draft_body, recipient, draft_id)
                 ledger.note(thread_id, "draft", "Draft stored. It has not been sent.")
             stored = ledger.get(thread_id)
+            draft_subject = "Re: " + str(stored.get("subject") or subject or "thread")
             ledger.close()
-            return _dump({"ok": True, "sent": False, "thread": stored})
+            return _dump({
+                "ok": True,
+                "sent": False,
+                "draft_subject": draft_subject,
+                "draft_body": stored.get("draft_body") or "",
+                "message": "Drafted from the thread. Do not ask for a subject or a body. Call am_send next.",
+                "thread": stored,
+            })
         except Exception as exc:
             return _error(exc)
 
@@ -417,13 +435,8 @@ SCHEMAS = {
     ),
     "am_prepare": _schema(
         "am_prepare",
-        "Call this first, once. Then call am_send and nothing else. Do not call am_ledger_get or am_draft_reply.",
-        {
-            "thread_id": {"type": "string"},
-            "to": {"type": "string"},
-            "subject": {"type": "string"},
-            "text": {"type": "string"},
-        },
+        "Call this immediately with only thread_id. Do not ask for a subject or a body. When they are omitted, the subject is Re: <thread subject> and the body is written from the thread. Then call am_send. Do not call am_ledger_get or am_draft_reply.",
+        {"thread_id": {"type": "string"}},
         ["thread_id"],
     ),
     "am_send": _schema(
@@ -542,19 +555,31 @@ def board(thread_id: str = "") -> dict:
         ledger.close()
 
 
-def pane_decision(thread_id: str, decision: str) -> dict:
-    """Record a pane decision. This never sends the draft."""
-    if decision not in {"approve", "deny"}:
+def pane_decision(thread_id: str, decision: str, actor: str = "operator") -> dict:
+    """Record a pane decision on the selected row. This never sends the draft."""
+    person = str(actor or "operator").strip() or "operator"
+    if decision == "approve":
+        detail = f"Approved by {person} - demo mode, not sent"
+    elif decision == "deny":
+        detail = f"Denied by {person} - demo mode, not sent"
+    else:
         raise LedgerError("unknown_decision", decision=decision)
     pulse("Recording a pane decision. The draft is not sent.")
     ledger = _ledger()
     try:
-        if decision == "approve":
-            stored = ledger.apply_event(thread_id, "approve")
-            ledger.note(thread_id, "pane-approve", "Approved in the pane. The draft was not sent.")
-        else:
-            stored = ledger.apply_event(thread_id, "return")
-            ledger.note(thread_id, "pane-deny", "Denied in the pane. The draft was not sent.")
-        return {"ok": True, "sent": False, "decision": decision, "thread": stored}
+        row = ledger.get(thread_id)
+        if row is None:
+            raise LedgerError("not_found", thread_id=thread_id)
+        if row["label"] == "needs-approval":
+            ledger.apply_event(thread_id, "approve" if decision == "approve" else "return")
+        stored = ledger.mark_send(thread_id, "not-sent", detail)
+        return {
+            "ok": True,
+            "sent": False,
+            "mock": True,
+            "decision": decision,
+            "thread": stored,
+            "history": ledger.history(thread_id),
+        }
     finally:
         ledger.close()

@@ -186,6 +186,8 @@ def test_prepare_is_one_call_and_send_never_sends_in_demo(home):
     prepared = json.loads(handlers["am_prepare"]({"thread_id": "thrd_harborline_1842"}))
     assert prepared["sent"] is False
     assert prepared["thread"]["label"] == "needs-approval"
+    assert prepared["draft_subject"].startswith("Re:")
+    assert "has not been sent" in prepared["draft_body"]
     gate = PKG.hooks.pre_tool_call("am_send", {"thread_id": "thrd_harborline_1842"}, [])
     assert gate["action"] == "approve"
     waiting = json.loads(handlers["am_ledger_get"]({"thread_id": "thrd_harborline_1842"}))
@@ -222,6 +224,23 @@ def test_live_send_posts_the_send_endpoint():
 
     mock = PKG.client.AgentMailClient("mock", "auto", transport=boom)
     assert mock.send_draft("ops", "draft_1")["sent"] is False
+
+
+def test_pane_approve_writes_an_audit_row_and_does_not_send(home):
+    PKG.tools.ensure_demo_threads()
+    approved = PKG.tools.pane_decision("thrd_harborline_1842", "approve", actor="Kine")
+    assert approved["sent"] is False
+    assert approved["mock"] is True
+    assert any(
+        row["detail"] == "Approved by Kine - demo mode, not sent"
+        for row in approved["history"]
+    )
+    denied = PKG.tools.pane_decision("thrd_northpier_220", "deny", actor="Kine")
+    assert denied["sent"] is False
+    assert any(
+        row["detail"] == "Denied by Kine - demo mode, not sent"
+        for row in denied["history"]
+    )
 
 
 def test_pane_decision_never_sends(home):

@@ -9,3 +9,7 @@ export const host = {
 export function useValue() {
   return null
 }
+
+export function Button(props) {
+  return props
+}

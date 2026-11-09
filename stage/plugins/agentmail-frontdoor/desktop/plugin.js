@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
+import { Button, host, useValue } from '@hermes/plugin-sdk'
 
 const ink = '#1c1915'
 const paper = '#f7f4ee'
@@ -33,6 +34,7 @@ function chipStyle(label) {
 }
 
 function FrontDoor(props) {
+  const profile = useValue(host.state.profile)
   const [board, setBoard] = useState({
     data_label: 'demo data',
     status: { line: 'Watching the inbox', at: '' },
@@ -82,15 +84,31 @@ function FrontDoor(props) {
     : 0
 
   function decide(decision) {
-    if (!selected) return
+    const threadId = (selected && selected.thread_id) || picked
+    if (!threadId) return
+    const actor = typeof profile === 'string' && profile.trim() ? profile.trim() : 'operator'
     setBusy(decision)
     props.rest('/decision', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ thread_id: selected.thread_id, decision }),
-    }).then(() => {
+      body: { thread_id: threadId, decision, actor },
+    }).then((body) => {
       setBusy('')
-    }).catch(() => setBusy(''))
+      setBoard((prev) => ({
+        ...prev,
+        error: '',
+        selected: (body && body.thread) || prev.selected,
+        history: (body && body.history) || prev.history,
+        threads: (prev.threads || []).map((thread) => (
+          body && body.thread && thread.thread_id === body.thread.thread_id ? body.thread : thread
+        )),
+      }))
+    }).catch((err) => {
+      setBusy('')
+      setBoard((prev) => ({
+        ...prev,
+        error: err && err.message ? err.message : 'The pane could not record that decision.',
+      }))
+    })
   }
 
   return jsxs('div', {
@@ -155,15 +173,25 @@ function FrontDoor(props) {
                     : 'Not sent. Demo mode never sends.',
               }),
               jsx('p', { style: { color: mute }, children: selected.recipient ? `To ${selected.recipient}.` : 'No recipient yet.' }),
-              selected.label === 'needs-approval'
-                ? jsxs('div', {
-                    style: { display: 'flex', gap: 8 },
-                    children: [
-                      jsx('button', { type: 'button', onClick: () => decide('approve'), disabled: !!busy, children: busy === 'approve' ? 'Recording…' : 'Approve' }),
-                      jsx('button', { type: 'button', onClick: () => decide('deny'), disabled: !!busy, children: busy === 'deny' ? 'Recording…' : 'Deny' }),
-                    ],
-                  })
-                : null,
+              jsxs('div', {
+                style: { display: 'flex', gap: 8, margin: '8px 0' },
+                children: [
+                  jsx(Button, {
+                    type: 'button',
+                    variant: 'default',
+                    disabled: !!busy,
+                    onClick: () => decide('approve'),
+                    children: busy === 'approve' ? 'Recording…' : 'Approve',
+                  }),
+                  jsx(Button, {
+                    type: 'button',
+                    variant: 'outline',
+                    disabled: !!busy,
+                    onClick: () => decide('deny'),
+                    children: busy === 'deny' ? 'Recording…' : 'Deny',
+                  }),
+                ],
+              }),
               jsx('h2', { style: { fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase' }, children: 'History' }),
               (board.history || []).length
                 ? jsx('ul', {
