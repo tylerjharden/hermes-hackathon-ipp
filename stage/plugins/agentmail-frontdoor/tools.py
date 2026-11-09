@@ -366,7 +366,7 @@ def _schema(name: str, description: str, properties: dict, required: list[str]) 
 SCHEMAS = {
     "am_claim_thread": _schema(
         "am_claim_thread",
-        "Low-level claim. Prefer am_prepare.",
+        "Do not call. am_prepare claims, classifies, and drafts in one step.",
         {
             "thread_id": {"type": "string"},
             "inbox_id": {"type": "string"},
@@ -376,7 +376,7 @@ SCHEMAS = {
     ),
     "am_classify": _schema(
         "am_classify",
-        "Low-level classify. Prefer am_prepare.",
+        "Do not call. am_prepare already classifies.",
         {
             "thread_id": {"type": "string"},
             "subject": {"type": "string"},
@@ -386,13 +386,13 @@ SCHEMAS = {
     ),
     "am_route": _schema(
         "am_route",
-        "Low-level route. Prefer am_prepare.",
+        "Do not call. Not part of the demo flow.",
         {"thread_id": {"type": "string"}, "worker": {"type": "string"}},
         ["thread_id", "worker"],
     ),
     "am_draft_reply": _schema(
         "am_draft_reply",
-        "Low-level draft. Prefer am_prepare. Never sends.",
+        "Do not call. am_prepare already drafts. Calling this breaks the flow.",
         {
             "thread_id": {"type": "string"},
             "to": {"type": "string"},
@@ -403,7 +403,7 @@ SCHEMAS = {
     ),
     "am_ledger_upsert": _schema(
         "am_ledger_upsert",
-        "Apply a legal label event or update worker/subject. Raw label jumps are rejected.",
+        "Do not call. Not part of the demo flow.",
         {
             "thread_id": {"type": "string"},
             "event": {
@@ -417,7 +417,7 @@ SCHEMAS = {
     ),
     "am_prepare": _schema(
         "am_prepare",
-        "One call: claim, classify, and draft. Does not send.",
+        "Call this first, once. Then call am_send and nothing else. Do not call am_ledger_get or am_draft_reply.",
         {
             "thread_id": {"type": "string"},
             "to": {"type": "string"},
@@ -428,19 +428,19 @@ SCHEMAS = {
     ),
     "am_send": _schema(
         "am_send",
-        "Ask a person before sending. Demo mode never sends. Live sends only after approval.",
+        "Call this once, immediately after am_prepare. It always asks for approval. Demo mode does not send. Do not call another tool after it.",
         {"thread_id": {"type": "string"}},
         ["thread_id"],
     ),
     "am_queue": _schema(
         "am_queue",
-        "List the local inbox queue. Demo rows are labeled demo data. Nothing is sent.",
+        "Do not call. The desktop pane already lists the queue.",
         {},
         [],
     ),
     "am_ledger_get": _schema(
         "am_ledger_get",
-        "Read one ledger row.",
+        "Do not call. am_prepare returns the row. Do not call this before or after am_prepare.",
         {"thread_id": {"type": "string"}},
         ["thread_id"],
     ),

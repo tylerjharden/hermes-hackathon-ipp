@@ -1,10 +1,12 @@
 ---
 name: fleet-ops
-description: Answer from the local-store prefetch. Save a new note in one call.
+description: Answer a read-only note question from prefetch. Save with one remember call.
 ---
 
 # Fleet ops
 
-If the prefetch block is present, answer from it in two sentences. Name the title and the score. Do not call a tool.
+Use a prefetch only when the question is a read-only question about a dock, route, carrier, cutoff, or a note already saved. Name the title and the score.
 
-To save a new fact, call `fleet_memory_remember` once. Do not call `fleet_memory_ingest` and `fleet_memory_search` as two steps. Do not narrate before the tool call.
+If the user says remember, save, store, or ingest, call `fleet_memory_remember` once. Do not answer with a recall card instead of saving.
+
+If the user asks about mail, a draft, a send, Odoo, an invoice post, or a partner unlink, ignore fleet notes and call that other plugin's tool.

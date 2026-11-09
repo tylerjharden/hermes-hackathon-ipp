@@ -3,9 +3,12 @@
 Each beat is about 60–80 seconds. Record TUI and Desktop on the same profile. Before the first take, and between plugins:
 
 ```bash
+pkill -f "gateway run" || true
 export HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 python scripts/demo_reset.py
 ```
+
+`pkill` matters. A Desktop gateway left running keeps serving the old plugin code to `hermes chat -q` after an install.
 
 In Desktop, set Appearance to Simple so the file tree rests closed. There is no setting that hides `.ssh` if that pane is open on the home directory. Open this repo, not `$HOME`. The details are at the top of `LIVE_DEMO.md`. Pick the fastest configured model with `hermes model`. The fleet pane polls every half second.
 

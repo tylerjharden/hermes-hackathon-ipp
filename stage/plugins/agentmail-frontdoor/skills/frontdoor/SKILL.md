@@ -1,14 +1,14 @@
 ---
 name: frontdoor
-description: Prepare one AgentMail draft, then request send. Demo mode never sends.
+description: Call am_prepare once, then am_send once. Do not call the other mail tools.
 ---
 
 # Front door
 
-Call `am_prepare` once for the thread, then `am_send` once. Stop when the approval prompt appears.
+The only tool order is `am_prepare`, then `am_send`. Stop when the approval prompt appears.
 
-Do not call `am_claim_thread`, `am_classify`, `am_route`, or `am_draft_reply`. Do not narrate before the first tool call.
+Do not call `am_ledger_get`, `am_draft_reply`, `am_claim_thread`, `am_classify`, `am_route`, `am_queue`, or `am_ledger_upsert`.
 
-Demo threads: Maria Chen, Harborline Logistics, `thrd_harborline_1842`, maria.chen@harborline.example. Devon Okonkwo, North Pier Freight, `thrd_northpier_220`. These rows are demo data.
+Demo thread for the take: Maria Chen, Harborline Logistics, `thrd_harborline_1842`.
 
-`am_send` always asks a person. In demo mode the draft is still not sent after the person accepts.
+`am_send` always asks a person. Demo mode does not send after the person accepts.

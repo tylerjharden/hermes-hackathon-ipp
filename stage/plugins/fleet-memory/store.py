@@ -186,7 +186,7 @@ def open_profile_store() -> NoteStore:
 
 
 def format_recall(notes: list[dict], budget_chars: int) -> str:
-    lines = ["Local store. Answer with these titles and scores."]
+    lines = ["Local store matches:"]
     used = len(lines[0])
     shown = 0
     for note in notes:

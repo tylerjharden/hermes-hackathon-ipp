@@ -123,6 +123,54 @@ def test_plugin_js_and_dashboard_parse():
     assert '"area":"panes"' in proc.stdout
 
 
+def test_odoo_prompt_does_not_get_a_fleet_prefetch(tmp_path):
+    provider = PKG.provider.FleetMemoryProvider(token="mock")
+    provider.initialize("s1", hermes_home=str(tmp_path))
+    prompt = "Post Harborline invoice INV-1842, then unlink North Pier Freight."
+    assert provider.prefetch(prompt) == ""
+    assert provider._store.recent_recalls() == []
+    block = provider.system_prompt_block().lower()
+    assert "do not call a tool" not in block
+    assert "fleet_memory_remember" in block
+    assert "odoo" in block
+    assert "unlink" in block
+    provider.shutdown()
+
+
+def test_save_prompt_does_not_prefetch_and_remember_persists(tmp_path):
+    provider = PKG.provider.FleetMemoryProvider(token="mock")
+    provider.initialize("s1", hermes_home=str(tmp_path))
+    prompt = (
+        "Remember this: Maria Chen is holding the GL-14 generator until invoice 1842 is confirmed. "
+        "Save it as harborline-hold."
+    )
+    assert provider.prefetch(prompt) == ""
+    saved = json.loads(provider.handle_tool_call("fleet_memory_remember", {
+        "id": "harborline-hold",
+        "title": "Harborline hold",
+        "body": "Maria Chen is holding the GL-14 generator until invoice 1842 is confirmed.",
+        "tags": ["harborline"],
+    }))
+    assert saved["ok"] is True
+    assert provider._store.get("harborline-hold")["title"] == "Harborline hold"
+    provider.shutdown()
+
+
+def test_next_recall_finds_the_saved_harborline_hold(tmp_path):
+    provider = PKG.provider.FleetMemoryProvider(token="mock")
+    provider.initialize("s1", hermes_home=str(tmp_path))
+    provider.handle_tool_call("fleet_memory_remember", {
+        "id": "harborline-hold",
+        "title": "Harborline hold",
+        "body": "Maria Chen is holding the GL-14 generator until invoice 1842 is confirmed.",
+        "tags": ["harborline"],
+    })
+    found = provider.prefetch("What did we just note about Harborline?")
+    assert "Harborline hold" in found
+    assert "Maria Chen" in found
+    provider.shutdown()
+
+
 def test_recall_cards_keep_query_and_title_apart(tmp_path):
     provider = PKG.provider.FleetMemoryProvider(token="mock")
     provider.initialize("s1", hermes_home=str(tmp_path))

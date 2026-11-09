@@ -80,8 +80,11 @@ Before recording, set Appearance to Simple. Simple's policy sets `fileBrowserOpe
 From the repo root, with `HERMES_HOME` pointed at the profile you are recording:
 
 ```bash
+pkill -f "gateway run" || true
 python scripts/demo_reset.py
 ```
+
+A Desktop gateway left running keeps serving stale plugin code to `hermes chat -q` after an install. Kill it before the reset.
 
 That restores two demo inbox threads (Maria Chen at Harborline Logistics, Devon Okonkwo at North Pier Freight), two Odoo gate rows (an allowlisted `account.move.action_post` and a gated `res.partner.unlink`), and the local fleet store plus one auto-recall for `freight cutoff`. The panes label this `demo data` or `local store`.
 

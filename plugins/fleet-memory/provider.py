@@ -109,6 +109,8 @@ class FleetMemoryProvider(MemoryProvider):
         return handler(args or {})
 
     def prefetch(self, query: str, *, session_id: str = "") -> str:
+        if not is_readonly_recall(query):
+            return ""
         store = self._require()
         _pulse(store, f"Auto-recall for {query}")
         notes = store.search(query, self._budget)
@@ -127,8 +129,14 @@ class FleetMemoryProvider(MemoryProvider):
 
     def system_prompt_block(self) -> str:
         return (
-            "If a local-store prefetch is present, answer from it in two sentences "
-            "and do not call a tool. Name the title and the score."
+            "A fleet prefetch is only for a read-only question about docks, routes, "
+            "carriers, cutoffs, or notes already saved. On that kind of question, "
+            "answer from the prefetch and name the title and the score. "
+            "When the user asks to remember, save, store, or ingest, call "
+            "fleet_memory_remember. A prefetch card is not a save. "
+            "When the user asks for mail, a draft, a send, Odoo, an invoice post, "
+            "a partner unlink, or any tool outside fleet memory, ignore the prefetch "
+            "and call that tool."
         )
 
     def on_session_end(self, messages=None) -> None:
@@ -258,6 +266,22 @@ TOOL_HANDLERS = {
     "fleet_memory_ingest": tool_ingest,
     "fleet_memory_remember": tool_remember,
 }
+
+
+def is_readonly_recall(query: str) -> bool:
+    """True only for a question the local store can answer without another tool."""
+    text = " ".join(str(query or "").lower().split())
+    if not text:
+        return False
+    if any(phrase in text for phrase in ("remember this", "remember:", "save it as", "save this as", "ingest")):
+        return False
+    if any(token in text for token in ("odoo", "unlink", "action_post", "res.partner", "account.move", "am_prepare", "am_send", "thrd_")):
+        return False
+    if "post" in text and "invoice" in text:
+        return False
+    if "prepare a reply" in text or ("send" in text and "reply" in text):
+        return False
+    return True
 
 
 def _pulse(store: NoteStore, line: str) -> None:
