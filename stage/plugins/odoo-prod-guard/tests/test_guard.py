@@ -148,6 +148,27 @@ def test_dashboard_module_parses():
     ast.parse((PLUGIN / "dashboard" / "plugin_api.py").read_text())
 
 
+def test_pane_buttons_do_not_call_odoo(home, monkeypatch):
+    def fail_call(self, *args, **kwargs):
+        raise AssertionError("odoo write")
+
+    monkeypatch.setattr(PKG.client.OdooClient, "call", fail_call)
+    monkeypatch.setattr(PKG.client.OdooClient, "search_read", fail_call)
+    monkeypatch.setattr(PKG.client.OdooClient, "version", fail_call)
+    log = PKG.log.GateLog()
+    unlink = next(event for event in log.recent() if event["model"] == "res.partner" and event["method"] == "unlink")
+    log.record("prod", "res.partner", "unlink", "approve", "Second gated unlink.", '{"id":221}')
+    fresh = next(event for event in log.recent() if event["preview"] == '{"id":221}')
+    denied = log.audit(unlink["id"], "deny", actor="Kine")
+    approved = log.audit(fresh["id"], "approve", actor="Kine")
+    assert denied["executed"] is False
+    assert approved["executed"] is False
+    assert denied["event"]["decision"] == "denied"
+    assert denied["event"]["audit"] == "Denied by Kine - write not executed"
+    assert approved["event"]["decision"] == "approved"
+    assert approved["event"]["audit"] == "Approved by Kine - write not executed"
+
+
 def test_pane_audit_does_not_execute(home):
     log = PKG.log.GateLog()
     events = log.recent()

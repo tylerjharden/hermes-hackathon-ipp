@@ -106,14 +106,20 @@ class GateLog:
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def audit(self, event_id: int, decision: str) -> dict:
-        if decision not in {"approve", "deny"}:
+    def audit(self, event_id: int, decision: str, actor: str = "operator") -> dict:
+        person = str(actor or "operator").strip() or "operator"
+        if decision == "approve":
+            note = f"Approved by {person} - write not executed"
+            state = "approved"
+        elif decision == "deny":
+            note = f"Denied by {person} - write not executed"
+            state = "denied"
+        else:
             raise ValueError("decision")
-        note = "Recorded in the pane. The write was not executed."
         with self._lock:
             cur = self._conn.execute(
-                "UPDATE gate_events SET audit = ? WHERE id = ?",
-                (f"{decision}: {note}", event_id),
+                "UPDATE gate_events SET decision = ?, audit = ? WHERE id = ?",
+                (state, note, event_id),
             )
             self._conn.commit()
             if cur.rowcount == 0:

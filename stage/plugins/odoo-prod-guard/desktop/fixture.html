@@ -15,11 +15,15 @@
     .chip { border-radius: 999px; padding: 2px 8px; font: 12px/1.4 ui-monospace, monospace; }
     .prod { background: #ffedd5; color: #9a3412; }
     .ok { background: #d1fae5; color: #065f46; }
+    .denied { background: #fee2e2; color: #991b1b; }
     .card { background: #fff; border: 1px solid #e4dccf; padding: 8px; margin-bottom: 8px; }
     pre { white-space: pre-wrap; font: 12px/1.4 ui-monospace, monospace; margin: 6px 0; }
     .item { padding: 8px 0; border-top: 1px solid #e4dccf; }
     .muted { color: #6b645b; }
-    button { font: inherit; padding: 6px 10px; }
+    button { font: inherit; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+    button.primary { background: #1c1915; color: #f7f4ee; border: 0; }
+    button.secondary { background: #fff; color: #1c1915; border: 1px solid #1c1915; }
+    .selected { outline: 2px solid #1c1915; }
     @media (max-width: 700px) { .chat { display: none; } .pane { width: 100%; border: 0; } }
   </style>
 </head>
@@ -36,24 +40,42 @@
         <div>account.move.action_post</div>
         <pre>{"partner":"Harborline Logistics","move":"INV-1842","amount":"18420.00"}</pre>
       </article>
-      <article class="card">
-        <div class="row"><strong>Gated write</strong><span class="chip prod">approve</span></div>
+      <article class="card selected" id="unlink-card">
+        <div class="row"><strong>Gated write</strong><span class="chip prod" id="card-badge">approve</span></div>
         <div>res.partner.unlink</div>
         <pre>{"partner":"North Pier Freight","id":220}</pre>
-        <button>Approve</button>
-        <button>Deny</button>
+        <p id="card-audit"></p>
+        <div id="card-actions" style="display:flex;gap:8px">
+          <button class="primary" id="approve" type="button">Approve</button>
+          <button class="secondary" id="deny" type="button">Deny</button>
+        </div>
       </article>
       <h2>Routine allowlist</h2>
       <div>account.move:action_post</div>
       <h2>Passed</h2>
       <div class="item"><span class="chip ok">allowed</span><div>account.move.action_post</div></div>
       <h2>Gated</h2>
-      <div class="item"><span class="chip prod">approve</span><div>res.partner.unlink</div><div class="muted">Waiting for approval. Not executed.</div></div>
+      <div class="item" id="unlink-row"><span class="chip prod" id="row-badge">approve</span><div>res.partner.unlink</div><div class="muted" id="row-note">Waiting for approval. Not executed.</div></div>
     </aside>
   </div>
   <script>
     let n = 0
     setInterval(() => { n += 1; document.getElementById('age').textContent = String(n) }, 1000)
+    function mark(decision, detail, chipClass) {
+      document.getElementById('card-badge').textContent = decision
+      document.getElementById('card-badge').className = 'chip ' + chipClass
+      document.getElementById('card-audit').textContent = detail
+      document.getElementById('card-actions').style.display = 'none'
+      document.getElementById('row-badge').textContent = decision
+      document.getElementById('row-badge').className = 'chip ' + chipClass
+      document.getElementById('row-note').textContent = detail
+    }
+    document.getElementById('approve').addEventListener('click', () => {
+      mark('approved', 'Approved by operator - write not executed', 'ok')
+    })
+    document.getElementById('deny').addEventListener('click', () => {
+      mark('denied', 'Denied by operator - write not executed', 'denied')
+    })
   </script>
 </body>
 </html>

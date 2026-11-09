@@ -33,6 +33,7 @@ def _package():
 class Decision(BaseModel):
     id: int
     decision: str
+    actor: str = "operator"
 
 
 @router.get("/summary")
@@ -45,6 +46,6 @@ async def summary():
 async def decision(body: Decision):
     log = _package().log.GateLog()
     try:
-        return log.audit(body.id, body.decision)
+        return log.audit(body.id, body.decision, body.actor)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

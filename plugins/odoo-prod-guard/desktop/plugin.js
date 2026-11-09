@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
+import { Button, host, useValue } from '@hermes/plugin-sdk'
 
 const ink = '#1c1915'
 const mute = '#6b645b'
 const line = '#e4dccf'
 
 function tone(decision) {
-  if (decision === 'allowed') return ['#d1fae5', '#065f46']
+  if (decision === 'allowed' || decision === 'approved') return ['#d1fae5', '#065f46']
   if (decision === 'approve') return ['#ffedd5', '#9a3412']
+  if (decision === 'denied') return ['#fee2e2', '#991b1b']
   if (decision === 'warn') return ['#fef3c7', '#92400e']
   return ['#e7e5e4', ink]
 }
@@ -27,6 +29,7 @@ function badge(label, colors) {
 }
 
 function GuardPane(props) {
+  const profile = useValue(host.state.profile)
   const [summary, setSummary] = useState({
     env: 'dev',
     routine_allowlist: [],
@@ -67,21 +70,37 @@ function GuardPane(props) {
 
   const events = summary.events || []
   const passed = events.filter((event) => event.decision === 'allowed' || event.decision === 'warn')
-  const gatedEvents = events.filter((event) => event.decision === 'approve')
+  const gatedEvents = events.filter((event) => event.decision === 'approve' || event.decision === 'approved' || event.decision === 'denied')
   const allow = summary.routine_allowlist || []
   const passing = events.find((event) => event.decision === 'allowed')
-  const gated = events.find((event) => event.decision === 'approve')
+  const gated = events.find((event) => event.model === 'res.partner' && event.method === 'unlink')
+    || events.find((event) => event.decision === 'approve')
   const age = summary.status && summary.status.at
     ? Math.max(0, Math.round((now - Date.parse(summary.status.at)) / 1000))
     : 0
 
   function decide(event, decision) {
+    const actor = typeof profile === 'string' && profile.trim() ? profile.trim() : 'operator'
     setBusy(event.id)
     props.rest('/decision', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: event.id, decision }),
-    }).then(() => setBusy(0)).catch(() => setBusy(0))
+      body: { id: event.id, decision, actor },
+    }).then((body) => {
+      setBusy(0)
+      const updated = body && body.event
+      if (!updated) return
+      setSummary((prev) => ({
+        ...prev,
+        error: '',
+        events: (prev.events || []).map((row) => row.id === updated.id ? updated : row),
+      }))
+    }).catch((err) => {
+      setBusy(0)
+      setSummary((prev) => ({
+        ...prev,
+        error: err && err.message ? err.message : 'The pane could not record that decision.',
+      }))
+    })
   }
 
   function card(event, title) {
@@ -103,15 +122,28 @@ function GuardPane(props) {
           style: { whiteSpace: 'pre-wrap', font: '12px/1.4 ui-monospace, monospace', margin: '6px 0' },
           children: event.preview || event.message,
         }),
-        event.audit
-          ? jsx('p', { children: event.audit })
-          : jsxs('div', {
+        event.audit ? jsx('p', { children: event.audit }) : null,
+        title === 'Gated write' && event.decision === 'approve'
+          ? jsxs('div', {
               style: { display: 'flex', gap: 8 },
               children: [
-                jsx('button', { type: 'button', disabled: busy === event.id, onClick: () => decide(event, 'approve'), children: 'Approve' }),
-                jsx('button', { type: 'button', disabled: busy === event.id, onClick: () => decide(event, 'deny'), children: 'Deny' }),
+                jsx(Button, {
+                  type: 'button',
+                  variant: 'default',
+                  disabled: busy === event.id,
+                  onClick: () => decide(event, 'approve'),
+                  children: busy === event.id ? 'Recording…' : 'Approve',
+                }),
+                jsx(Button, {
+                  type: 'button',
+                  variant: 'outline',
+                  disabled: busy === event.id,
+                  onClick: () => decide(event, 'deny'),
+                  children: busy === event.id ? 'Recording…' : 'Deny',
+                }),
               ],
-            }),
+            })
+          : null,
       ],
     })
   }
