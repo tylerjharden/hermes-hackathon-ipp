@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import sys
 from pathlib import Path
@@ -35,9 +36,33 @@ def _store():
 @router.get("/summary")
 async def summary():
     store = _store()
+    from agent.secret_scope import get_secret
+    token = ""
+    try:
+        token = (get_secret("NOTION_TOKEN") or "").strip()
+    except Exception:
+        token = ""
+    if token == "mock":
+        token = ""
+    status = {"at": "", "line": "Watching the local store"}
+    status_path = store.root / "status.json"
+    if status_path.is_file():
+        try:
+            status = json.loads(status_path.read_text())
+        except Exception:
+            status = status
+    from datetime import datetime, timezone
+    module = sys.modules["fleet_memory_pkg"].store
+    line = status.get("line") or "Watching the local store"
+    status = {**status, "line": module.fit_words(line, 72)}
     payload = {
         "counts": store.counts(),
-        "recalls": store.recent_recalls(),
+        "recalls": module.present_recalls(store.recent_recalls()),
+        "notes": store.recent_notes(),
+        "backend": "notion" if token else "local",
+        "data_label": "notion" if token else "local store",
+        "status": status,
+        "server_time": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     store.close()
     return payload

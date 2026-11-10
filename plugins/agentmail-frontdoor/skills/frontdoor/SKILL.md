@@ -1,18 +1,14 @@
 ---
 name: frontdoor
-description: Claim an AgentMail thread, classify it, and draft a reply. Do not send.
+description: Call am_prepare once, then am_send once. Do not call the other mail tools.
 ---
 
 # Front door
 
-Use the AgentMail front-door tools in this order.
+The only tool order is `am_prepare`, then `am_send`. Call `am_prepare` with the thread id only. Do not ask for a subject or a body. The tool writes `Re: <thread subject>` and a body from the thread. Stop when the approval prompt appears.
 
-1. Call `am_claim_thread` with the inbound thread id.
-2. Call `am_classify` with the subject and body.
-3. Call `am_route` with a worker name when a person or queue should own the thread.
-4. Call `am_draft_reply` to create a draft. The ledger label becomes `needs-approval`.
-5. Call `am_ledger_get` to read the row back.
+Do not call `am_ledger_get`, `am_draft_reply`, `am_claim_thread`, `am_classify`, `am_route`, `am_queue`, or `am_ledger_upsert`.
 
-`am_draft_reply` creates a draft. It does not send. A send tool is blocked for recipients outside the allowlist. An allowlisted send returns an approve directive so Hermes asks a person.
+Demo thread for the take: Maria Chen, Harborline Logistics, `thrd_harborline_1842`.
 
-Label order is `triage`, `delegated`, `awaiting-worker`, `needs-approval`, `done`. `am_ledger_upsert` accepts an event name. It rejects a raw jump to another label.
+`am_send` always asks a person. Demo mode does not send after the person accepts.

@@ -102,6 +102,9 @@ def test_register_and_hook_kwargs(home):
         def register_hook(self, name, callback):
             self.hooks.setdefault(name, []).append(callback)
 
+        def register_skill(self, *args, **kwargs):
+            return None
+
         def get_config(self, key, default=None):
             values = {"env": "prod", "routine_allowlist": ["account.move:action_post"]}
             return values.get(key, default)
@@ -123,7 +126,7 @@ def test_register_and_hook_kwargs(home):
 
 def test_plugin_js_has_no_forbidden_surface():
     text = (PLUGIN / "desktop" / "plugin.js").read_text()
-    for banned in ("eval(", "new Function", "import(", "data-slot", "window.hermesDesktop"):
+    for banned in ("eval(", "new Function", "import(", "data-slot", "window.hermesDesktop", "fixture"):
         assert banned not in text
     proc = subprocess.run(
         [
@@ -143,6 +146,52 @@ def test_plugin_js_has_no_forbidden_surface():
 
 def test_dashboard_module_parses():
     ast.parse((PLUGIN / "dashboard" / "plugin_api.py").read_text())
+
+
+def test_pane_buttons_do_not_call_odoo(home, monkeypatch):
+    def fail_call(self, *args, **kwargs):
+        raise AssertionError("odoo write")
+
+    monkeypatch.setattr(PKG.client.OdooClient, "call", fail_call)
+    monkeypatch.setattr(PKG.client.OdooClient, "search_read", fail_call)
+    monkeypatch.setattr(PKG.client.OdooClient, "version", fail_call)
+    log = PKG.log.GateLog()
+    unlink = next(event for event in log.recent() if event["model"] == "res.partner" and event["method"] == "unlink")
+    log.record("prod", "res.partner", "unlink", "approve", "Second gated unlink.", '{"id":221}')
+    fresh = next(event for event in log.recent() if event["preview"] == '{"id":221}')
+    denied = log.audit(unlink["id"], "deny", actor="Kine")
+    approved = log.audit(fresh["id"], "approve", actor="Kine")
+    assert denied["executed"] is False
+    assert approved["executed"] is False
+    assert denied["event"]["decision"] == "denied"
+    assert denied["event"]["audit"] == "Denied by Kine - write not executed"
+    assert approved["event"]["decision"] == "approved"
+    assert approved["event"]["audit"] == "Approved by Kine - write not executed"
+
+
+def test_default_profile_is_named_operator(home):
+    log = PKG.log.GateLog()
+    unlink = next(event for event in log.recent() if event["method"] == "unlink")
+    denied = log.audit(unlink["id"], "deny", actor="default")
+    assert denied["event"]["audit"] == "Denied by operator - write not executed"
+    log.record("prod", "res.partner", "write", "approve", "Another gated write.", '{"id":330}')
+    fresh = next(event for event in log.recent() if event["preview"] == '{"id":330}')
+    approved = log.audit(fresh["id"], "approve", actor="")
+    assert approved["event"]["audit"] == "Approved by operator - write not executed"
+    assert "default" not in denied["event"]["audit"]
+    assert "default" not in approved["event"]["audit"]
+
+
+def test_pane_audit_does_not_execute(home):
+    log = PKG.log.GateLog()
+    events = log.recent()
+    gated = next(event for event in events if event["decision"] == "approve")
+    result = log.audit(gated["id"], "deny")
+    assert result["executed"] is False
+    assert "not executed" in result["event"]["audit"]
+    summary = log.read_summary()
+    assert summary["data_label"] == "demo data"
+    assert "Harborline Logistics" in json.dumps(summary["events"])
 
 
 def test_demo_script(home):

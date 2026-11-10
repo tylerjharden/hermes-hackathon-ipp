@@ -1,0 +1,4 @@
+{
+  "name": "agentmail-frontdoor",
+  "api": "plugin_api.py"
+}

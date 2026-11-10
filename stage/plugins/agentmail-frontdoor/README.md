@@ -24,20 +24,22 @@ From this directory, with no API key:
 python demo.py
 ```
 
-The script claims `tests/fixtures/inbound.json`, classifies it, creates a draft, and prints:
+The script claims the Harborline Logistics thread in `tests/fixtures/inbound.json`, classifies it, creates a draft, and prints:
 
 ```text
 label=needs-approval
-draft_id=draft_mock_thrd_fixture_1001
+draft_id=draft_mock_thrd_harborline_1842
 sent=false
 ```
 
-The ledger file is `$HERMES_HOME/plugin-data/agentmail-frontdoor/ledger.db`. The script sets `HERMES_HOME` to a temp directory when you do not.
+The ledger file is `$HERMES_HOME/plugin-data/agentmail-frontdoor/ledger.db`. The script sets `HERMES_HOME` to a temp directory when you do not. `python scripts/demo_reset.py` from the repo root restores Maria Chen and Devon Okonkwo. Those rows are demo data.
+
+The desktop pane is `desktop/plugin.js`. It polls `GET /api/plugins/agentmail-frontdoor/board` every second and posts Approve or Deny to `/decision`. That post updates the ledger only. The draft is not sent. Open `desktop/fixture.html` when Hermes Desktop is not running.
 
 In chat, after the placeholder key is set:
 
 ```text
-Claim thread thrd_fixture_1001 in inbox ops about "Urgent invoice for dock GL-14", classify the body, and draft a reply to vendor@example.com. Do not send it.
+Maria Chen at Harborline Logistics wrote about invoice 1842 for the generator move off dock GL-14. Claim thread thrd_harborline_1842, classify it, and draft a reply to maria.chen@harborline.example. Leave the draft for approval.
 ```
 
 ## Labels

@@ -2,95 +2,79 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Odoo prod guard fixture</title>
+  <title>Odoo prod guard demo</title>
   <style>
-    :root { color-scheme: light; }
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font: 14px/1.4 "Iowan Old Style", "Palatino Linotype", Palatino, serif;
-      background: #efeae2;
-      color: #1c1915;
-    }
+    body { margin: 0; font: 14px/1.4 "Iowan Old Style", Palatino, serif; background: #efeae2; color: #1c1915; }
     .shell { display: flex; min-height: 100vh; }
     .chat { flex: 1; padding: 24px; color: #6b645b; }
-    .pane {
-      width: 320px;
-      background: #f7f4ee;
-      border-left: 1px solid #ddd4c6;
-      padding: 16px;
-    }
+    .pane { width: 320px; background: #f7f4ee; border-left: 1px solid #ddd4c6; padding: 16px; }
     h1 { font-size: 18px; margin: 0; }
-    h2 { font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; margin: 16px 0 6px; }
-    .pane-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-    .badge { border-radius: 999px; padding: 2px 8px; font: 12px/1.4 ui-monospace, monospace; }
-    .badge-prod { background: #ffedd5; color: #9a3412; }
-    .badge-dev { background: #d1fae5; color: #1e3a34; }
+    h2 { font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
+    .row { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+    .chip { border-radius: 999px; padding: 2px 8px; font: 12px/1.4 ui-monospace, monospace; }
+    .prod { background: #ffedd5; color: #9a3412; }
+    .ok { background: #d1fae5; color: #065f46; }
+    .denied { background: #fee2e2; color: #991b1b; }
+    .card { background: #fff; border: 1px solid #e4dccf; padding: 8px; margin-bottom: 8px; }
+    pre { white-space: pre-wrap; font: 12px/1.4 ui-monospace, monospace; margin: 6px 0; }
+    .item { padding: 8px 0; border-top: 1px solid #e4dccf; }
     .muted { color: #6b645b; }
-    ul { list-style: none; padding: 0; margin: 0; }
-    li { padding: 8px 0; border-top: 1px solid #e4dccf; display: flex; flex-direction: column; gap: 2px; }
-    .decision { font: 12px/1.3 ui-monospace, monospace; }
-    button { margin-top: 12px; font: inherit; padding: 6px 10px; }
-    @media (max-width: 700px) {
-      .shell { display: block; }
-      .chat { display: none; }
-      .pane { width: 100%; border-left: 0; }
-    }
+    button { font: inherit; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+    button.primary { background: #1c1915; color: #f7f4ee; border: 0; }
+    button.secondary { background: #fff; color: #1c1915; border: 1px solid #1c1915; }
+    .selected { outline: 2px solid #1c1915; }
+    @media (max-width: 700px) { .chat { display: none; } .pane { width: 100%; border: 0; } }
   </style>
 </head>
 <body>
   <div class="shell">
     <main class="chat">Chat stays on the left. The guard pane is the right column.</main>
-    <aside class="pane" id="pane">
-      <header class="pane-head">
-        <h1>Odoo prod guard</h1>
-        <span class="badge badge-prod" id="badge">prod</span>
-      </header>
-      <h2>Environment</h2>
-      <p id="env-copy">Production writes are gated.</p>
+    <aside class="pane">
+      <div class="row"><h1>Odoo prod guard</h1><span class="chip prod">prod</span></div>
+      <p class="muted">demo data · Checking res.partner.unlink · <span id="age">0</span>s</p>
+      <p class="muted">Approve and Deny mark the audit trail. They do not run the write.</p>
+      <h2>Allowlist beside the gate</h2>
+      <article class="card">
+        <div class="row"><strong>Allowlisted write</strong><span class="chip ok">allowed</span></div>
+        <div>account.move.action_post</div>
+        <pre>{"partner":"Harborline Logistics","move":"INV-1842","amount":"18420.00"}</pre>
+      </article>
+      <article class="card selected" id="unlink-card">
+        <div class="row"><strong>Gated write</strong><span class="chip prod" id="card-badge">approve</span></div>
+        <div>res.partner.unlink</div>
+        <pre>{"partner":"North Pier Freight","id":220}</pre>
+        <p id="card-audit"></p>
+        <div id="card-actions" style="display:flex;gap:8px">
+          <button class="primary" id="approve" type="button">Approve</button>
+          <button class="secondary" id="deny" type="button">Deny</button>
+        </div>
+      </article>
       <h2>Routine allowlist</h2>
-      <ul id="allow"><li>account.move:action_post</li></ul>
-      <h2>Recent gated calls</h2>
-      <ul class="events" id="events"></ul>
-      <button type="button" id="refresh">Refresh</button>
+      <div>account.move:action_post</div>
+      <h2>Passed</h2>
+      <div class="item"><span class="chip ok">allowed</span><div>account.move.action_post</div></div>
+      <h2>Gated</h2>
+      <div class="item" id="unlink-row"><span class="chip prod" id="row-badge">approve</span><div>res.partner.unlink</div><div class="muted" id="row-note">Waiting for approval. Not executed.</div></div>
     </aside>
   </div>
   <script>
-    const ready = [
-      { decision: "approve", model: "res.partner", method: "unlink", at: "2026-11-04T18:00:00Z" },
-      { decision: "allowed", model: "account.move", method: "action_post", at: "2026-11-04T18:01:00Z" }
-    ]
-    const params = new URLSearchParams(location.search)
-    let events = params.get("state") === "before" ? [] : ready
-    const host = document.getElementById("events")
-    function paint() {
-      host.replaceChildren()
-      if (!events.length) {
-        const p = document.createElement("p")
-        p.className = "muted"
-        p.textContent = "No gated calls yet."
-        host.append(p)
-        return
-      }
-      for (const event of events) {
-        const li = document.createElement("li")
-        const decision = document.createElement("span")
-        decision.className = "decision"
-        decision.textContent = event.decision
-        const name = document.createElement("span")
-        name.textContent = event.model + "." + event.method
-        const at = document.createElement("span")
-        at.className = "muted"
-        at.textContent = event.at
-        li.append(decision, name, at)
-        host.append(li)
-      }
+    let n = 0
+    setInterval(() => { n += 1; document.getElementById('age').textContent = String(n) }, 1000)
+    function mark(decision, detail, chipClass) {
+      document.getElementById('card-badge').textContent = decision
+      document.getElementById('card-badge').className = 'chip ' + chipClass
+      document.getElementById('card-audit').textContent = detail
+      document.getElementById('card-actions').style.display = 'none'
+      document.getElementById('row-badge').textContent = decision
+      document.getElementById('row-badge').className = 'chip ' + chipClass
+      document.getElementById('row-note').textContent = detail
     }
-    paint()
-    document.getElementById("refresh").addEventListener("click", () => {
-      events = ready
-      paint()
+    document.getElementById('approve').addEventListener('click', () => {
+      mark('approved', 'Approved by operator - write not executed', 'ok')
+    })
+    document.getElementById('deny').addEventListener('click', () => {
+      mark('denied', 'Denied by operator - write not executed', 'denied')
     })
   </script>
 </body>

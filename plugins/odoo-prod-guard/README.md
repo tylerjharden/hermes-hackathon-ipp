@@ -26,7 +26,7 @@ In chat:
 What Odoo version is this, and do not change any records.
 ```
 
-The desktop pane is `desktop/plugin.js`. It calls `GET /api/plugins/odoo-prod-guard/summary` and shows the env badge, the allowlist, and recent gated calls. Hermes Desktop is not required to read the layout. Open `desktop/fixture.html` for the same pane. `?state=before` is the empty list. The default is the populated list. Press Refresh on the empty pane to show the sample rows.
+The desktop pane is `desktop/plugin.js`. It polls `GET /api/plugins/odoo-prod-guard/summary` every second. The pane shows an allowlisted write beside a gated write, the call log, and a preview of the values. Approve and Deny post to `/decision` and only mark the audit trail. They do not run the write. Open `desktop/fixture.html` when Hermes Desktop is not running. The badge reads `demo data` while the Odoo secrets are unset or `mock`.
 
 ## Gate
 

@@ -8,30 +8,15 @@ Three Hermes Agent plugins for the Nous Research plugin hackathon. Each one regi
 | `plugins/odoo-prod-guard` | Odoo JSON-2 reads and writes. Non-routine production writes wait for Hermes approval. |
 | `plugins/fleet-memory` | Recalls local fleet notes and can search Notion off the turn thread. |
 
+## Live session
+
+Capture Hermes TUI and Desktop with [LIVE_DEMO.md](LIVE_DEMO.md). That path installs Hermes `v0.22.7`, installs each plugin with `--ref`, and leaves secrets unset so the tools and panes run on the fixture stores. `demo.py` is the unit-test helper.
+
 ## Install
 
-Install Hermes, then install one directory at a time:
+Follow [LIVE_DEMO.md](LIVE_DEMO.md). The installer id is `tylerjharden/hermes-hackathon-ipp/plugins/<name>` plus `--ref` set to the full commit SHA. Leave the secret prompts empty. Unset secrets stay on the fixture backend.
 
 ```bash
-hermes plugins install "$PWD/plugins/agentmail-frontdoor"
-hermes plugins install "$PWD/plugins/odoo-prod-guard"
-hermes plugins install "$PWD/plugins/fleet-memory"
-export AGENTMAIL_API_KEY=mock ODOO_URL=mock ODOO_DB=mock ODOO_USER=mock ODOO_API_KEY=mock NOTION_TOKEN=mock
-hermes plugins enable agentmail-frontdoor
-hermes plugins enable odoo-prod-guard
-hermes plugins enable fleet-memory
-```
-
-`mock` is a placeholder so the loader can enable the plugin with no live credential. The tools stay on local fixtures until you set a real secret and, where the plugin has a mode, switch it to live.
-
-## Demo
-
-Each plugin has a Demo section in its own README. From a checkout, with no credentials:
-
-```bash
-python plugins/agentmail-frontdoor/demo.py
-python plugins/odoo-prod-guard/demo.py
-python plugins/fleet-memory/demo.py
 pytest
 ```
 

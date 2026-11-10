@@ -69,6 +69,16 @@ class AgentMailClient:
         }
         return self._request("POST", f"/v0/inboxes/{inbox_id}/drafts", body)
 
+    def send_draft(self, inbox_id: str, draft_id: str) -> dict:
+        """Live only. Mock mode never opens a socket."""
+        if self.mode == "mock":
+            return {"mock": True, "sent": False, "draft_id": draft_id}
+        return self._request(
+            "POST",
+            f"/v0/inboxes/{inbox_id}/drafts/{draft_id}/send",
+            {},
+        )
+
     def set_labels(self, inbox_id: str, thread_id: str, label: str, previous: str | None) -> dict:
         if self.mode == "mock":
             return {"mock": True, "label": label}

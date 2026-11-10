@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import math
+import os
+import re
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -45,6 +48,11 @@ class NoteStore:
             )
             """
         )
+        columns = {row[1] for row in self._conn.execute("PRAGMA table_info(recalls)")}
+        if "source" not in columns:
+            self._conn.execute("ALTER TABLE recalls ADD COLUMN source TEXT NOT NULL DEFAULT 'tool'")
+        if "hits" not in columns:
+            self._conn.execute("ALTER TABLE recalls ADD COLUMN hits TEXT NOT NULL DEFAULT '[]'")
         self._conn.execute(
             """
             CREATE TABLE IF NOT EXISTS turns (
@@ -102,39 +110,48 @@ class NoteStore:
         return _note(row) if row else None
 
     def search(self, query: str, limit: int) -> list[dict]:
-        tokens = [part for part in query.lower().split() if part]
         with self._lock:
             rows = self._conn.execute("SELECT * FROM notes").fetchall()
-        ranked = []
-        for row in rows:
-            note = _note(row)
-            hay = " ".join([note["title"], note["body"], " ".join(note["tags"])]).lower()
-            score = sum(1 for token in tokens if token in hay) if tokens else 1
-            if score:
-                ranked.append((score, note))
-        ranked.sort(key=lambda item: (-item[0], item[1]["id"]))
-        return [note for _, note in ranked[:limit]]
+        notes = [_note(row) for row in rows]
+        return _bm25(notes, query, limit)
 
-    def record_recall(self, query: str, hit_ids: list[str]) -> None:
+    def record_recall(self, query: str, hit_ids: list[str], source: str = "tool", hits: list[dict] | None = None) -> None:
+        cards = []
+        for hit in hits or []:
+            cards.append({
+                "id": hit.get("id"),
+                "title": hit.get("title") or "",
+                "snippet": hit.get("snippet") or (hit.get("body") or "")[:160],
+                "score": hit.get("score") or 0,
+            })
         with self._lock:
             self._conn.execute(
-                "INSERT INTO recalls (at, query, hit_ids) VALUES (?, ?, ?)",
-                (_now(), query, json.dumps(hit_ids)),
+                "INSERT INTO recalls (at, query, hit_ids, source, hits) VALUES (?, ?, ?, ?, ?)",
+                (_now(), query, json.dumps(hit_ids), source, json.dumps(cards)),
             )
             self._conn.commit()
 
     def recent_recalls(self, limit: int = 10) -> list[dict]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT at, query, hit_ids FROM recalls ORDER BY id DESC LIMIT ?",
+                "SELECT id, at, query, hit_ids, source, hits FROM recalls ORDER BY id DESC LIMIT ?",
                 (limit,),
             ).fetchall()
         found = []
         for row in rows:
             item = dict(row)
             item["hit_ids"] = json.loads(item["hit_ids"])
+            item["hits"] = json.loads(item["hits"] or "[]")
             found.append(item)
         return found
+
+    def recent_notes(self, limit: int = 8) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM notes ORDER BY updated_at DESC, id ASC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [_note(row) for row in rows]
 
     def append_turn(self, session_id: str, user_text: str, assistant_text: str) -> None:
         with self._lock:
@@ -161,15 +178,132 @@ def _note(row: sqlite3.Row) -> dict:
     return data
 
 
+def fit_words(text: str, max_chars: int = 52) -> str:
+    """Keep a pane title on two lines and cut only at a word boundary."""
+    value = " ".join(str(text or "").split())
+    if len(value) <= max_chars:
+        return value
+    window = value[: max_chars + 1]
+    cut = window.rfind(" ")
+    base = window[:cut] if cut >= 8 else value[:max_chars]
+    return base.rstrip(" .,;:!?-") + "…"
+
+
+def present_recalls(rows: list[dict]) -> list[dict]:
+    """One row per event id. A save and a later search stay, with different labels."""
+    labels = {"auto": "auto-recall", "saved": "saved", "tool": "recalled"}
+    seen: set[int] = set()
+    presented = []
+    for row in rows:
+        event_id = row.get("id")
+        if isinstance(event_id, int):
+            if event_id in seen:
+                continue
+            seen.add(event_id)
+        hits = []
+        titles = set()
+        for hit in row.get("hits") or []:
+            title = hit.get("title") or ""
+            titles.add(title)
+            shown = dict(hit)
+            shown["title_text"] = fit_words(title)
+            hits.append(shown)
+        query = row.get("query") or ""
+        presented.append({
+            **row,
+            "label": labels.get(row.get("source") or "", "recalled"),
+            "query_text": fit_words(query),
+            "show_query": query not in titles,
+            "hits": hits,
+        })
+    return presented
+
+
+def open_profile_store() -> NoteStore:
+    home = os.environ.get("HERMES_HOME", "").strip()
+    if not home:
+        raise RuntimeError("HERMES_HOME is not set")
+    return NoteStore(Path(home) / "fleet-memory")
+
+
 def format_recall(notes: list[dict], budget_chars: int) -> str:
-    lines = ["Fleet notes:"]
+    lines = ["Local store matches:"]
     used = len(lines[0])
+    shown = 0
     for note in notes:
-        line = f"- {note['title']}: {note['body']}"
+        score = note.get("score", 0)
+        shown_score = f"{score:.2f}" if isinstance(score, float) else str(score)
+        line = f"- {note['title']} (score {shown_score}): {note['body']}"
         if used + len(line) + 1 > budget_chars:
             break
         lines.append(line)
         used += len(line) + 1
-    if len(lines) == 1:
+        shown += 1
+    if shown == 0:
         return ""
     return "\n".join(lines)
+
+
+_STOP = frozenset(
+    "a an the to of and or for on in at is are was were be do does did when what how with from this that it".split()
+)
+_TOKEN = re.compile(r"[a-z0-9]+")
+
+
+def _tokens(text: str) -> list[str]:
+    return [tok for tok in _TOKEN.findall(text.lower()) if tok not in _STOP]
+
+
+def _bm25(notes: list[dict], query: str, limit: int) -> list[dict]:
+    """Rank notes with BM25. A hit must clear 45% of the best score."""
+    query_tokens = _tokens(query)
+    if not notes or not query_tokens or limit <= 0:
+        return []
+    docs = []
+    for note in notes:
+        weighted = (
+            _tokens(note["title"]) * 3
+            + _tokens(note["body"])
+            + _tokens(" ".join(note["tags"]))
+            + _tokens(str(note["id"]).replace("-", " "))
+        )
+        docs.append((note, weighted))
+    total = len(docs)
+    avgdl = sum(len(tokens) for _, tokens in docs) / total or 1
+    df: dict[str, int] = {}
+    for _, tokens in docs:
+        for token in set(tokens):
+            df[token] = df.get(token, 0) + 1
+    k1 = 1.5
+    b = 0.75
+    ranked = []
+    for note, tokens in docs:
+        counts: dict[str, int] = {}
+        for token in tokens:
+            counts[token] = counts.get(token, 0) + 1
+        length = len(tokens) or 1
+        score = 0.0
+        for token in query_tokens:
+            freq = counts.get(token, 0)
+            if not freq:
+                continue
+            idf = math.log(1 + (total - df.get(token, 0) + 0.5) / (df.get(token, 0) + 0.5))
+            denom = freq + k1 * (1 - b + b * length / avgdl)
+            score += idf * (freq * (k1 + 1)) / denom
+        if score > 0:
+            ranked.append((score, note))
+    if not ranked:
+        return []
+    ranked.sort(key=lambda item: (-item[0], item[1]["id"]))
+    floor = ranked[0][0] * 0.45
+    found = []
+    for score, note in ranked:
+        if score < floor:
+            break
+        card = dict(note)
+        card["score"] = round(score, 2)
+        card["snippet"] = note["body"][:160]
+        found.append(card)
+        if len(found) >= limit:
+            break
+    return found

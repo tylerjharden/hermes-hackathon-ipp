@@ -64,16 +64,30 @@ def test_register_returns_a_new_instance():
     seen = []
 
     class Ctx:
+        def __init__(self):
+            self.tools = {}
+
         def register_memory_provider(self, provider):
             seen.append(provider)
 
         def register_skill(self, *args, **kwargs):
             return None
 
-    PKG.register(Ctx())
-    PKG.register(Ctx())
+        def register_tool(self, **kwargs):
+            self.tools[kwargs["name"]] = kwargs
+
+    ctx_a = Ctx()
+    ctx_b = Ctx()
+    PKG.register(ctx_a)
+    PKG.register(ctx_b)
     assert seen[0] is not seen[1]
     assert seen[0].name == "fleet-memory"
+    assert set(ctx_a.tools) == {
+        "fleet_memory_search",
+        "fleet_memory_status",
+        "fleet_memory_ingest",
+        "fleet_memory_remember",
+    }
     names = [item["name"] for item in seen[0].get_tool_schemas()]
     manifest = (PLUGIN / "plugin.yaml").read_text()
     for name in names:
@@ -90,7 +104,7 @@ def test_second_initialize_is_rejected(tmp_path):
 
 def test_plugin_js_and_dashboard_parse():
     text = (PLUGIN / "desktop" / "plugin.js").read_text()
-    for banned in ("eval(", "new Function", "import(", "data-slot", "window.hermesDesktop"):
+    for banned in ("eval(", "new Function", "import(", "data-slot", "window.hermesDesktop", "fixture"):
         assert banned not in text
     ast.parse((PLUGIN / "dashboard" / "plugin_api.py").read_text())
     proc = subprocess.run(
@@ -107,6 +121,118 @@ def test_plugin_js_and_dashboard_parse():
     )
     assert proc.returncode == 0, proc.stderr
     assert '"area":"panes"' in proc.stdout
+
+
+def test_odoo_prompt_does_not_get_a_fleet_prefetch(tmp_path):
+    provider = PKG.provider.FleetMemoryProvider(token="mock")
+    provider.initialize("s1", hermes_home=str(tmp_path))
+    prompt = "Post Harborline invoice INV-1842, then unlink North Pier Freight."
+    assert provider.prefetch(prompt) == ""
+    assert provider._store.recent_recalls() == []
+    block = provider.system_prompt_block().lower()
+    assert "do not call a tool" not in block
+    assert "fleet_memory_remember" in block
+    assert "odoo" in block
+    assert "unlink" in block
+    provider.shutdown()
+
+
+def test_save_prompt_does_not_prefetch_and_remember_persists(tmp_path):
+    provider = PKG.provider.FleetMemoryProvider(token="mock")
+    provider.initialize("s1", hermes_home=str(tmp_path))
+    prompt = (
+        "Remember this: Maria Chen is holding the GL-14 generator until invoice 1842 is confirmed. "
+        "Save it as harborline-hold."
+    )
+    assert provider.prefetch(prompt) == ""
+    saved = json.loads(provider.handle_tool_call("fleet_memory_remember", {
+        "id": "harborline-hold",
+        "title": "Harborline hold",
+        "body": "Maria Chen is holding the GL-14 generator until invoice 1842 is confirmed.",
+        "tags": ["harborline"],
+    }))
+    assert saved["ok"] is True
+    assert provider._store.get("harborline-hold")["title"] == "Harborline hold"
+    provider.shutdown()
+
+
+def test_next_recall_finds_the_saved_harborline_hold(tmp_path):
+    provider = PKG.provider.FleetMemoryProvider(token="mock")
+    provider.initialize("s1", hermes_home=str(tmp_path))
+    provider.handle_tool_call("fleet_memory_remember", {
+        "id": "harborline-hold",
+        "title": "Harborline hold",
+        "body": "Maria Chen is holding the GL-14 generator until invoice 1842 is confirmed.",
+        "tags": ["harborline"],
+    })
+    found = provider.prefetch("What did we just note about Harborline?")
+    assert "Harborline hold" in found
+    assert "Maria Chen" in found
+    provider.shutdown()
+
+
+def test_saved_and_recalled_events_stay_distinct(tmp_path):
+    provider = PKG.provider.FleetMemoryProvider(token="mock")
+    provider.initialize("s1", hermes_home=str(tmp_path))
+    provider.handle_tool_call("fleet_memory_remember", {
+        "id": "harborline-hold",
+        "title": "Harborline hold",
+        "body": "Maria Chen is holding the GL-14 generator until invoice 1842 is confirmed.",
+        "tags": ["harborline", "generator"],
+    })
+    provider.handle_tool_call("fleet_memory_search", {"query": "generator", "limit": 3})
+    rows = PKG.store.present_recalls(provider._store.recent_recalls())
+    assert [row["label"] for row in rows] == ["recalled", "saved"]
+    assert len({row["id"] for row in rows}) == 2
+    assert rows[1]["show_query"] is False
+    harborline_hits = [
+        hit["title"]
+        for row in rows
+        for hit in row["hits"]
+        if hit["id"] == "harborline-hold"
+    ]
+    assert harborline_hits == ["Harborline hold", "Harborline hold"]
+    doubled = PKG.store.present_recalls(rows + [dict(rows[0])])
+    assert [row["id"] for row in doubled] == [row["id"] for row in rows]
+    long_title = "What is the fleet memory status for the afternoon carrier window"
+    fitted = PKG.store.fit_words(long_title)
+    assert fitted.endswith("…")
+    words = fitted[:-1].split()
+    assert words
+    assert all(word in long_title.split() for word in words)
+    assert "sta" not in words
+    provider.shutdown()
+
+
+def test_recall_cards_keep_query_and_title_apart(tmp_path):
+    provider = PKG.provider.FleetMemoryProvider(token="mock")
+    provider.initialize("s1", hermes_home=str(tmp_path))
+    text = provider.prefetch("freight cutoff")
+    recalls = provider._store.recent_recalls()
+    assert recalls[0]["source"] == "auto"
+    assert recalls[0]["query"] == "freight cutoff"
+    hit = next(item for item in recalls[0]["hits"] if item["id"] == "dock-cutoff")
+    assert hit["title"] == "Same-day dock cutoff"
+    assert hit["score"] >= 1
+    assert "freight cutoffdock-cutoff" not in json.dumps(recalls[0])
+    assert "local store" in text.lower()
+    assert "score" in text
+    broad = provider._store.search("warehouse cycle count tuesday", 5)
+    assert [note["id"] for note in broad] == ["count-cycle"]
+    assert provider._store.search("zzzz-nomatch", 5) == []
+    ingested = json.loads(provider.handle_tool_call(
+        "fleet_memory_ingest",
+        {
+            "id": "harborline-hold",
+            "title": "Harborline hold",
+            "body": "Maria Chen asked to hold the GL-14 generator until the invoice is confirmed.",
+            "tags": ["harborline"],
+        },
+    ))
+    found = json.loads(provider.handle_tool_call("fleet_memory_search", {"query": "Harborline hold", "limit": 3}))
+    assert found["notes"][0]["id"] == ingested["note"]["id"]
+    assert found["notes"][0]["score"] >= 1
+    provider.shutdown()
 
 
 def test_demo_script(tmp_path):
