@@ -52,9 +52,12 @@ async def summary():
         except Exception:
             status = status
     from datetime import datetime, timezone
+    module = sys.modules["fleet_memory_pkg"].store
+    line = status.get("line") or "Watching the local store"
+    status = {**status, "line": module.fit_words(line, 72)}
     payload = {
         "counts": store.counts(),
-        "recalls": store.recent_recalls(),
+        "recalls": module.present_recalls(store.recent_recalls()),
         "notes": store.recent_notes(),
         "backend": "notion" if token else "local",
         "data_label": "notion" if token else "local store",

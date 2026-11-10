@@ -134,7 +134,7 @@ class NoteStore:
     def recent_recalls(self, limit: int = 10) -> list[dict]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT at, query, hit_ids, source, hits FROM recalls ORDER BY id DESC LIMIT ?",
+                "SELECT id, at, query, hit_ids, source, hits FROM recalls ORDER BY id DESC LIMIT ?",
                 (limit,),
             ).fetchall()
         found = []
@@ -176,6 +176,47 @@ def _note(row: sqlite3.Row) -> dict:
     data = dict(row)
     data["tags"] = json.loads(data["tags"])
     return data
+
+
+def fit_words(text: str, max_chars: int = 52) -> str:
+    """Keep a pane title on two lines and cut only at a word boundary."""
+    value = " ".join(str(text or "").split())
+    if len(value) <= max_chars:
+        return value
+    window = value[: max_chars + 1]
+    cut = window.rfind(" ")
+    base = window[:cut] if cut >= 8 else value[:max_chars]
+    return base.rstrip(" .,;:!?-") + "…"
+
+
+def present_recalls(rows: list[dict]) -> list[dict]:
+    """One row per event id. A save and a later search stay, with different labels."""
+    labels = {"auto": "auto-recall", "saved": "saved", "tool": "recalled"}
+    seen: set[int] = set()
+    presented = []
+    for row in rows:
+        event_id = row.get("id")
+        if isinstance(event_id, int):
+            if event_id in seen:
+                continue
+            seen.add(event_id)
+        hits = []
+        titles = set()
+        for hit in row.get("hits") or []:
+            title = hit.get("title") or ""
+            titles.add(title)
+            shown = dict(hit)
+            shown["title_text"] = fit_words(title)
+            hits.append(shown)
+        query = row.get("query") or ""
+        presented.append({
+            **row,
+            "label": labels.get(row.get("source") or "", "recalled"),
+            "query_text": fit_words(query),
+            "show_query": query not in titles,
+            "hits": hits,
+        })
+    return presented
 
 
 def open_profile_store() -> NoteStore:

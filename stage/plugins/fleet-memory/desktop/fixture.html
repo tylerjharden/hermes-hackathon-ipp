@@ -2,45 +2,67 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Fleet memory demo</title>
+  <title>Fleet memory long titles</title>
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; font: 14px/1.4 "Iowan Old Style", Palatino, serif; background: #efeae2; color: #1c1915; }
-    .shell { display: flex; min-height: 100vh; }
-    .chat { flex: 1; padding: 24px; color: #6b645b; }
-    .pane { width: 320px; background: #f7f4ee; border-left: 1px solid #ddd4c6; padding: 16px; }
+    body { margin: 0; width: 320px; font: 14px/1.35 "Iowan Old Style", Palatino, serif; background: #f7f4ee; color: #1c1915; }
+    .pane { width: 320px; padding: 16px; }
     h1 { font-size: 18px; margin: 0; }
     h2 { font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
-    .row { display: flex; justify-content: space-between; gap: 8px; }
+    .head { display: flex; justify-content: space-between; gap: 8px; }
+    .badge { color: #6b645b; font: 12px/1.4 ui-monospace, monospace; white-space: nowrap; }
+    .clamp {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      line-height: 1.35;
+      max-height: 2.7em;
+      overflow-wrap: break-word;
+      word-break: normal;
+    }
     .card { background: #fff; border: 1px solid #e4dccf; padding: 8px; margin-top: 6px; }
-    .item { padding: 6px 0; border-top: 1px solid #e4dccf; }
     .muted { color: #6b645b; }
-    @media (max-width: 700px) { .chat { display: none; } .pane { width: 100%; border: 0; } }
+    .item { padding: 8px 0; border-top: 1px solid #e4dccf; }
   </style>
 </head>
 <body>
-  <div class="shell">
-    <main class="chat">Ops questions land here. Recall cards stay in the right pane.</main>
-    <aside class="pane">
-      <div class="row"><h1>Fleet memory</h1><span class="muted">local store</span></div>
-      <p class="muted">Auto-recall for freight cutoff · <span id="age">0</span>s</p>
-      <p>6 notes · 1 recall · 0 turns</p>
-      <h2>Recall cards</h2>
-      <article class="item">
-        <div class="row"><strong>freight cutoff</strong><span class="muted">auto-recall</span></div>
-        <div class="card">
-          <div class="row"><strong>Same-day dock cutoff</strong><span>score 2</span></div>
-          <p>Warren dock GL-14 accepts same-day freight until 14:30 America/New_York.</p>
-        </div>
-      </article>
-      <h2>Timeline</h2>
-      <div class="item"><div>Same-day dock cutoff</div><div class="muted">local store</div></div>
-      <div class="item"><div>Generator lane</div><div class="muted">local store</div></div>
-    </aside>
-  </div>
-  <script>
-    let n = 0
-    setInterval(() => { n += 1; document.getElementById('age').textContent = String(n) }, 1000)
-  </script>
+  <aside class="pane">
+    <div class="head"><h1>Fleet memory</h1><span class="badge">local store</span></div>
+    <p class="muted">Watching the local store · 2s</p>
+    <p>7 notes · 3 recalls · 0 turns</p>
+    <h2>Recall cards</h2>
+    <article class="item">
+      <div class="badge">auto-recall</div>
+      <strong class="clamp">What is the fleet memory status for the afternoon carrier</strong>
+      <div class="card">
+        <strong class="clamp">What is the GL-14 dock cutoff Harborline?</strong>
+        <div class="muted">score 2.40</div>
+        <p>Warren dock GL-14 accepts same-day freight until 14:30 America/New_York.</p>
+      </div>
+    </article>
+    <article class="item">
+      <div class="badge">saved</div>
+      <div class="card">
+        <strong class="clamp">Harborline hold</strong>
+        <div class="muted">score 4.10</div>
+        <p>Maria Chen is holding the GL-14 generator until invoice 1842 is confirmed.</p>
+      </div>
+    </article>
+    <article class="item">
+      <div class="badge">recalled</div>
+      <strong class="clamp">generator</strong>
+      <div class="card">
+        <strong class="clamp">Harborline hold</strong>
+        <div class="muted">score 1.80</div>
+        <p>Maria Chen is holding the GL-14 generator until invoice 1842 is confirmed.</p>
+      </div>
+      <div class="card">
+        <strong class="clamp">Generator lane</strong>
+        <div class="muted">score 3.20</div>
+        <p>Generator shipments stage in lane B and leave on route GL-14.</p>
+      </div>
+    </article>
+  </aside>
 </body>
 </html>

@@ -189,7 +189,7 @@ class FleetMemoryProvider(MemoryProvider):
         if not stored.get("ok"):
             return json.dumps(stored)
         notes = self._require().search(str(args.get("title") or ""), 3)
-        self._require().record_recall(str(args.get("title") or ""), [note["id"] for note in notes], source="tool", hits=notes)
+        self._require().record_recall(str(args.get("title") or ""), [note["id"] for note in notes], source="saved", hits=notes)
         return json.dumps({"ok": True, "note": stored["note"], "notes": notes})
 
 
@@ -253,7 +253,7 @@ def tool_remember(args: dict, **kwargs) -> str:
             [str(tag) for tag in tags],
         )
         notes = store.search(str(args.get("title") or ""), 3)
-        store.record_recall(str(args.get("title") or ""), [item["id"] for item in notes], source="tool", hits=notes)
+        store.record_recall(str(args.get("title") or ""), [item["id"] for item in notes], source="saved", hits=notes)
         _pulse(store, f"Remembered {note['title']}")
         return json.dumps({"ok": True, "backend": "local", "note": note, "notes": notes})
     finally:

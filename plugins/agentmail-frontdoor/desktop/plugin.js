@@ -86,7 +86,8 @@ function FrontDoor(props) {
   function decide(decision) {
     const threadId = (selected && selected.thread_id) || picked
     if (!threadId) return
-    const actor = typeof profile === 'string' && profile.trim() ? profile.trim() : 'operator'
+    const raw = typeof profile === 'string' ? profile.trim() : ''
+    const actor = !raw || raw.toLowerCase() === 'default' ? 'operator' : raw
     setBusy(decision)
     props.rest('/decision', {
       method: 'POST',

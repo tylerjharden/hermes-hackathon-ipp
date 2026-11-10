@@ -5,6 +5,30 @@ const ink = '#1c1915'
 const mute = '#6b645b'
 const line = '#e4dccf'
 
+const twoLines = {
+  display: '-webkit-box',
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
+  lineHeight: '1.35',
+  maxHeight: '2.7em',
+  wordBreak: 'normal',
+  overflowWrap: 'break-word',
+  minWidth: 0,
+}
+
+function shownRecalls(rows) {
+  const seen = new Set()
+  const out = []
+  for (const row of rows || []) {
+    const key = row.id != null ? String(row.id) : `${row.at}|${row.source}|${row.query}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(row)
+  }
+  return out
+}
+
 function MemoryPane(props) {
   const [summary, setSummary] = useState({
     counts: { notes: 0, recalls: 0, turns: 0 },
@@ -44,7 +68,7 @@ function MemoryPane(props) {
   }, [])
 
   const counts = summary.counts || { notes: 0, recalls: 0, turns: 0 }
-  const recalls = summary.recalls || []
+  const recalls = shownRecalls(summary.recalls)
   const notes = summary.notes || []
   const age = summary.status && summary.status.at
     ? Math.max(0, Math.round((now - Date.parse(summary.status.at)) / 1000))
@@ -64,7 +88,7 @@ function MemoryPane(props) {
         ],
       }),
       jsx('p', {
-        style: { color: mute },
+        style: { color: mute, overflowWrap: 'break-word', wordBreak: 'normal', margin: '8px 0' },
         children: `${(summary.status && summary.status.line) || 'Watching the local store'} · ${age}s`,
       }),
       summary.error ? jsx('p', { style: { color: '#991b1b' }, children: summary.error }) : null,
@@ -74,28 +98,23 @@ function MemoryPane(props) {
         ? recalls.map((recall) => jsxs('article', {
             style: { borderTop: `1px solid ${line}`, padding: '8px 0' },
             children: [
-              jsxs('div', {
-                style: { display: 'flex', justifyContent: 'space-between', gap: 8 },
-                children: [
-                  jsx('strong', { children: recall.query }),
-                  jsx('span', { style: { color: mute }, children: recall.source === 'auto' ? 'auto-recall' : 'search' }),
-                ],
+              jsx('div', {
+                style: { color: mute, font: '12px/1.4 ui-monospace, monospace', whiteSpace: 'nowrap' },
+                children: recall.label || (recall.source === 'auto' ? 'auto-recall' : 'recalled'),
               }),
+              recall.show_query === false
+                ? null
+                : jsx('strong', { style: twoLines, children: recall.query_text || recall.query }),
               (recall.hits || []).map((hit) => jsxs('div', {
                 style: { background: '#fff', border: `1px solid ${line}`, padding: 8, marginTop: 6 },
                 children: [
-                  jsxs('div', {
-                    style: { display: 'flex', justifyContent: 'space-between', gap: 8 },
-                    children: [
-                      jsx('strong', { children: hit.title }),
-                      jsx('span', { children: `score ${hit.score}` }),
-                    ],
-                  }),
-                  jsx('p', { style: { margin: '4px 0 0' }, children: hit.snippet }),
+                  jsx('strong', { style: twoLines, children: hit.title_text || hit.title }),
+                  jsx('div', { style: { color: mute, marginTop: 4 }, children: `score ${hit.score}` }),
+                  jsx('p', { style: { margin: '4px 0 0', overflowWrap: 'break-word' }, children: hit.snippet }),
                 ],
-              }, `${recall.at}-${hit.id}`)),
+              }, `${recall.id}-${hit.id}`)),
             ],
-          }, `${recall.at}-${recall.query}`))
+          }, String(recall.id)))
         : jsx('p', { style: { color: mute }, children: 'No recalls yet.' }),
       jsx('h2', { style: { fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase' }, children: 'Timeline' }),
       notes.length
@@ -104,7 +123,7 @@ function MemoryPane(props) {
             children: notes.map((note) => jsxs('li', {
               style: { padding: '6px 0', borderTop: `1px solid ${line}` },
               children: [
-                jsx('div', { children: note.title }),
+                jsx('div', { style: twoLines, children: note.title }),
                 jsx('div', { style: { color: mute }, children: note.updated_at }),
               ],
             }, note.id)),

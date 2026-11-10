@@ -171,6 +171,39 @@ def test_next_recall_finds_the_saved_harborline_hold(tmp_path):
     provider.shutdown()
 
 
+def test_saved_and_recalled_events_stay_distinct(tmp_path):
+    provider = PKG.provider.FleetMemoryProvider(token="mock")
+    provider.initialize("s1", hermes_home=str(tmp_path))
+    provider.handle_tool_call("fleet_memory_remember", {
+        "id": "harborline-hold",
+        "title": "Harborline hold",
+        "body": "Maria Chen is holding the GL-14 generator until invoice 1842 is confirmed.",
+        "tags": ["harborline", "generator"],
+    })
+    provider.handle_tool_call("fleet_memory_search", {"query": "generator", "limit": 3})
+    rows = PKG.store.present_recalls(provider._store.recent_recalls())
+    assert [row["label"] for row in rows] == ["recalled", "saved"]
+    assert len({row["id"] for row in rows}) == 2
+    assert rows[1]["show_query"] is False
+    harborline_hits = [
+        hit["title"]
+        for row in rows
+        for hit in row["hits"]
+        if hit["id"] == "harborline-hold"
+    ]
+    assert harborline_hits == ["Harborline hold", "Harborline hold"]
+    doubled = PKG.store.present_recalls(rows + [dict(rows[0])])
+    assert [row["id"] for row in doubled] == [row["id"] for row in rows]
+    long_title = "What is the fleet memory status for the afternoon carrier window"
+    fitted = PKG.store.fit_words(long_title)
+    assert fitted.endswith("…")
+    words = fitted[:-1].split()
+    assert words
+    assert all(word in long_title.split() for word in words)
+    assert "sta" not in words
+    provider.shutdown()
+
+
 def test_recall_cards_keep_query_and_title_apart(tmp_path):
     provider = PKG.provider.FleetMemoryProvider(token="mock")
     provider.initialize("s1", hermes_home=str(tmp_path))

@@ -107,7 +107,7 @@ class GateLog:
         return [dict(row) for row in rows]
 
     def audit(self, event_id: int, decision: str, actor: str = "operator") -> dict:
-        person = str(actor or "operator").strip() or "operator"
+        person = _display_actor(actor)
         if decision == "approve":
             note = f"Approved by {person} - write not executed"
             state = "approved"
@@ -153,6 +153,13 @@ class GateLog:
         stored["status"] = read_status(self.root)
         stored["server_time"] = _now()
         return stored
+
+
+def _display_actor(actor: str | None) -> str:
+    person = str(actor or "").strip()
+    if not person or person.lower() == "default":
+        return "operator"
+    return person
 
 
 def pulse(line: str, root: Path | None = None) -> None:

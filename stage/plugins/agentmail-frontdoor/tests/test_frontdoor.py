@@ -243,6 +243,22 @@ def test_pane_approve_writes_an_audit_row_and_does_not_send(home):
     )
 
 
+def test_default_profile_is_named_operator(home):
+    PKG.tools.ensure_demo_threads()
+    approved = PKG.tools.pane_decision("thrd_harborline_1842", "approve", actor="default")
+    assert any(
+        row["detail"] == "Approved by operator - demo mode, not sent"
+        for row in approved["history"]
+    )
+    denied = PKG.tools.pane_decision("thrd_northpier_220", "deny", actor=" ")
+    assert any(
+        row["detail"] == "Denied by operator - demo mode, not sent"
+        for row in denied["history"]
+    )
+    assert "default" not in json.dumps(approved["history"])
+    assert "default" not in json.dumps(denied["history"])
+
+
 def test_pane_decision_never_sends(home):
     PKG.tools.ensure_demo_threads()
     result = PKG.tools.pane_decision("thrd_northpier_220", "deny")

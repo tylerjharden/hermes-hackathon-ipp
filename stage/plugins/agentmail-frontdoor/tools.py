@@ -555,9 +555,16 @@ def board(thread_id: str = "") -> dict:
         ledger.close()
 
 
+def _display_actor(actor: str | None) -> str:
+    person = str(actor or "").strip()
+    if not person or person.lower() == "default":
+        return "operator"
+    return person
+
+
 def pane_decision(thread_id: str, decision: str, actor: str = "operator") -> dict:
     """Record a pane decision on the selected row. This never sends the draft."""
-    person = str(actor or "operator").strip() or "operator"
+    person = _display_actor(actor)
     if decision == "approve":
         detail = f"Approved by {person} - demo mode, not sent"
     elif decision == "deny":

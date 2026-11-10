@@ -169,6 +169,19 @@ def test_pane_buttons_do_not_call_odoo(home, monkeypatch):
     assert approved["event"]["audit"] == "Approved by Kine - write not executed"
 
 
+def test_default_profile_is_named_operator(home):
+    log = PKG.log.GateLog()
+    unlink = next(event for event in log.recent() if event["method"] == "unlink")
+    denied = log.audit(unlink["id"], "deny", actor="default")
+    assert denied["event"]["audit"] == "Denied by operator - write not executed"
+    log.record("prod", "res.partner", "write", "approve", "Another gated write.", '{"id":330}')
+    fresh = next(event for event in log.recent() if event["preview"] == '{"id":330}')
+    approved = log.audit(fresh["id"], "approve", actor="")
+    assert approved["event"]["audit"] == "Approved by operator - write not executed"
+    assert "default" not in denied["event"]["audit"]
+    assert "default" not in approved["event"]["audit"]
+
+
 def test_pane_audit_does_not_execute(home):
     log = PKG.log.GateLog()
     events = log.recent()

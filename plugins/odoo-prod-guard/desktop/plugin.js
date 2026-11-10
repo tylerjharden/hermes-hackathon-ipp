@@ -80,7 +80,8 @@ function GuardPane(props) {
     : 0
 
   function decide(event, decision) {
-    const actor = typeof profile === 'string' && profile.trim() ? profile.trim() : 'operator'
+    const raw = typeof profile === 'string' ? profile.trim() : ''
+    const actor = !raw || raw.toLowerCase() === 'default' ? 'operator' : raw
     setBusy(event.id)
     props.rest('/decision', {
       method: 'POST',
